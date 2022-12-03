@@ -15,6 +15,8 @@
 		C10A4690293B1911005CEE6D /* GaussTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A468F293B1911005CEE6D /* GaussTests.swift */; };
 		C10A469A293B1911005CEE6D /* GaussUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A4699293B1911005CEE6D /* GaussUITests.swift */; };
 		C10A469C293B1911005CEE6D /* GaussUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A469B293B1911005CEE6D /* GaussUITestsLaunchTests.swift */; };
+		C10A46A9293BB0C9005CEE6D /* PromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46A8293BB0C9005CEE6D /* PromptView.swift */; };
+		C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AA293BC512005CEE6D /* ResultView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +50,9 @@
 		C10A4695293B1911005CEE6D /* GaussUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GaussUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10A4699293B1911005CEE6D /* GaussUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussUITests.swift; sourceTree = "<group>"; };
 		C10A469B293B1911005CEE6D /* GaussUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		C10A46A8293BB0C9005CEE6D /* PromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptView.swift; sourceTree = "<group>"; };
+		C10A46AA293BC512005CEE6D /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
+		C10A46AD293BCB5A005CEE6D /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = "ml-stable-diffusion"; path = "../ml-stable-diffusion"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +83,7 @@
 		C10A466E293B190F005CEE6D = {
 			isa = PBXGroup;
 			children = (
+				C10A46AC293BCB5A005CEE6D /* Packages */,
 				C10A4679293B190F005CEE6D /* Gauss */,
 				C10A468E293B1911005CEE6D /* GaussTests */,
 				C10A4698293B1911005CEE6D /* GaussUITests */,
@@ -105,6 +111,8 @@
 				C10A4682293B1910005CEE6D /* Info.plist */,
 				C10A4683293B1910005CEE6D /* Gauss.entitlements */,
 				C10A4684293B1910005CEE6D /* Preview Content */,
+				C10A46A8293BB0C9005CEE6D /* PromptView.swift */,
+				C10A46AA293BC512005CEE6D /* ResultView.swift */,
 			);
 			path = Gauss;
 			sourceTree = "<group>";
@@ -132,6 +140,14 @@
 				C10A469B293B1911005CEE6D /* GaussUITestsLaunchTests.swift */,
 			);
 			path = GaussUITests;
+			sourceTree = "<group>";
+		};
+		C10A46AC293BCB5A005CEE6D /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				C10A46AD293BCB5A005CEE6D /* ml-stable-diffusion */,
+			);
+			name = Packages;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -264,7 +280,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C10A46A9293BB0C9005CEE6D /* PromptView.swift in Sources */,
 				C10A467D293B190F005CEE6D /* GaussDocument.swift in Sources */,
+				C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */,
 				C10A467B293B190F005CEE6D /* GaussApp.swift in Sources */,
 				C10A467F293B190F005CEE6D /* ContentView.swift in Sources */,
 			);

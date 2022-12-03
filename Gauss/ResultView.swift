@@ -8,13 +8,19 @@
 import SwiftUI
 
 struct ResultView: View {
+    @Binding var result: GaussResult
+    @Binding var images: GaussImages
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        Text("ImageID: \(result.imageId)")
+        Toggle("Favorite", isOn: $result.favorite)
     }
 }
 
 struct ResultView_Previews: PreviewProvider {
+    @State static var result = GaussResult(promptId: UUID(), imageId: UUID())
+    
     static var previews: some View {
-        ResultView()
+        ResultView(result: $result, images: .constant([:]))
     }
 }
