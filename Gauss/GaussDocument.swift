@@ -30,11 +30,12 @@ struct GaussPrompt: Identifiable, Codable {
 
     // ML parameters
     var text = ""
-    var negativeText = ""
+//    var negativeText = ""
     
-    var guidance = 5.0
+//    var guidance = 5.0
     var steps = 10.0
     var seed = GaussSeed.random
+    var safety = true
     
     var width = 512
     var height = 512

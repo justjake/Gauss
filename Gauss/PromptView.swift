@@ -13,15 +13,11 @@ import SwiftUI
 //var steps = 10
 //var seed = GaussSeed.random
 
-struct DoubleProxy {
-    @Binding var int: Int
-
-    
-}
 
 struct PromptView: View {
     @Binding var prompt: GaussPrompt
     @Binding var images: GaussImages
+    @State var jobs: [GenerateImageJob] = []
     
     var body: some View {
         Form {
@@ -31,29 +27,8 @@ struct PromptView: View {
                 ).textFieldStyle(.roundedBorder)
                     .navigationTitle("Prompt")
             }
-                            
-            Section(header: Text("Negative Prompt")) {
-                Text("AI will try to avoid this").foregroundColor(.secondary)
-                TextEditor(
-                    text: $prompt.negativeText
-                ).textFieldStyle(.roundedBorder)
-                    .navigationTitle("Prompt")
-
-            }
             
             Section() {
-                Slider(value: $prompt.guidance, in: 1...20, step: 1
-                ) {
-                    Text("Guidance")
-                } minimumValueLabel: {
-                    Text("1")
-                } maximumValueLabel: {
-                    Text("20")
-                }
-                Text(prompt.guidance.formatted())
-                    .multilineTextAlignment(.center)
-                    .badge(/*@START_MENU_TOKEN@*/"Label"/*@END_MENU_TOKEN@*/)
-                
                 Slider(value: $prompt.steps, in: 1...75, step: 1) {
                     Text("Steps")
                 } minimumValueLabel: {
@@ -62,21 +37,34 @@ struct PromptView: View {
                     Text("75")
                 }
                 Text(prompt.steps.formatted()).multilineTextAlignment(.center)
+                
+                Toggle("Safe", isOn: $prompt.safety)
             }
             
             Section() {
-                Button("Generate +", action: { print("clicked")
+                Button("Generate +", action: {
+                    self.generateImage()
                 }).buttonStyle(.borderedProminent)
                 
                 ScrollView(.horizontal) {
                     LazyHStack {
+                        ForEach($jobs) { $job in
+                            ProgressView(job: job)
+                        }
+                        
                         ForEach($prompt.results) { $result in
                             ResultView(result: $result, images: $images)
                         }
                     }
                 }
             }
-        }.padding(.horizontal)
+        }
+    }
+    
+    func generateImage() {
+        let kernel = GaussKernel()
+        let job = kernel.generate(forPrompt: prompt)
+        jobs.append(job)
     }
 }
 

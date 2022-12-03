@@ -32,7 +32,6 @@ struct ContentView_Previews: PreviewProvider {
         
         var negativePrompt = GaussPrompt()
         negativePrompt.text = "A cyberpunk street samurai weilding an energy katana, by wopr, volumetric light, hyper realistic"
-        negativePrompt.negativeText = "multiple arms, watermark, signature"
 
         return GaussDocument(prompts: [prompt, negativePrompt])
     }

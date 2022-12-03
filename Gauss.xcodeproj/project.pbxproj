@@ -17,6 +17,10 @@
 		C10A469C293B1911005CEE6D /* GaussUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A469B293B1911005CEE6D /* GaussUITestsLaunchTests.swift */; };
 		C10A46A9293BB0C9005CEE6D /* PromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46A8293BB0C9005CEE6D /* PromptView.swift */; };
 		C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AA293BC512005CEE6D /* ResultView.swift */; };
+		C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AE293BD460005CEE6D /* GaussKernel.swift */; };
+		C161F20F293C0D28007F518C /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = C161F20E293C0D28007F518C /* Resources */; };
+		C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1825333293BFBFB0038E152 /* StableDiffusion */; };
+		C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1825335293BFE1A0038E152 /* ProgressView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,7 +56,10 @@
 		C10A469B293B1911005CEE6D /* GaussUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		C10A46A8293BB0C9005CEE6D /* PromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptView.swift; sourceTree = "<group>"; };
 		C10A46AA293BC512005CEE6D /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
-		C10A46AD293BCB5A005CEE6D /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = "ml-stable-diffusion"; path = "../ml-stable-diffusion"; sourceTree = "<group>"; };
+		C10A46AE293BD460005CEE6D /* GaussKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussKernel.swift; sourceTree = "<group>"; };
+		C161F20E293C0D28007F518C /* Resources */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = folder; name = Resources; path = "ml-stable-diffusion/build/sd2-base/Resources"; sourceTree = SOURCE_ROOT; };
+		C1825331293BFB000038E152 /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "ml-stable-diffusion"; sourceTree = "<group>"; };
+		C1825335293BFE1A0038E152 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +67,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,11 +91,12 @@
 		C10A466E293B190F005CEE6D = {
 			isa = PBXGroup;
 			children = (
-				C10A46AC293BCB5A005CEE6D /* Packages */,
+				C1825330293BFB000038E152 /* Packages */,
 				C10A4679293B190F005CEE6D /* Gauss */,
 				C10A468E293B1911005CEE6D /* GaussTests */,
 				C10A4698293B1911005CEE6D /* GaussUITests */,
 				C10A4678293B190F005CEE6D /* Products */,
+				C1825332293BFBFB0038E152 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -104,14 +113,17 @@
 		C10A4679293B190F005CEE6D /* Gauss */ = {
 			isa = PBXGroup;
 			children = (
+				C161F20E293C0D28007F518C /* Resources */,
 				C10A467A293B190F005CEE6D /* GaussApp.swift */,
 				C10A467C293B190F005CEE6D /* GaussDocument.swift */,
+				C10A46AE293BD460005CEE6D /* GaussKernel.swift */,
 				C10A467E293B190F005CEE6D /* ContentView.swift */,
 				C10A4680293B1910005CEE6D /* Assets.xcassets */,
 				C10A4682293B1910005CEE6D /* Info.plist */,
 				C10A4683293B1910005CEE6D /* Gauss.entitlements */,
 				C10A4684293B1910005CEE6D /* Preview Content */,
 				C10A46A8293BB0C9005CEE6D /* PromptView.swift */,
+				C1825335293BFE1A0038E152 /* ProgressView.swift */,
 				C10A46AA293BC512005CEE6D /* ResultView.swift */,
 			);
 			path = Gauss;
@@ -142,12 +154,19 @@
 			path = GaussUITests;
 			sourceTree = "<group>";
 		};
-		C10A46AC293BCB5A005CEE6D /* Packages */ = {
+		C1825330293BFB000038E152 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				C10A46AD293BCB5A005CEE6D /* ml-stable-diffusion */,
+				C1825331293BFB000038E152 /* ml-stable-diffusion */,
 			);
 			name = Packages;
+			sourceTree = "<group>";
+		};
+		C1825332293BFBFB0038E152 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -166,6 +185,9 @@
 			dependencies = (
 			);
 			name = Gauss;
+			packageProductDependencies = (
+				C1825333293BFBFB0038E152 /* StableDiffusion */,
+			);
 			productName = Gauss;
 			productReference = C10A4677293B190F005CEE6D /* Gauss.app */;
 			productType = "com.apple.product-type.application";
@@ -256,6 +278,7 @@
 			files = (
 				C10A4686293B1910005CEE6D /* Preview Assets.xcassets in Resources */,
 				C10A4681293B1910005CEE6D /* Assets.xcassets in Resources */,
+				C161F20F293C0D28007F518C /* Resources in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,6 +307,8 @@
 				C10A467D293B190F005CEE6D /* GaussDocument.swift in Sources */,
 				C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */,
 				C10A467B293B190F005CEE6D /* GaussApp.swift in Sources */,
+				C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */,
+				C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */,
 				C10A467F293B190F005CEE6D /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -357,6 +382,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/**";
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -415,6 +441,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/**";
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -459,7 +486,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 12.6;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = tl.jake.Gauss;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -500,7 +527,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 12.6;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = tl.jake.Gauss;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -642,6 +669,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C1825333293BFBFB0038E152 /* StableDiffusion */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StableDiffusion;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C10A466F293B190F005CEE6D /* Project object */;
 }
