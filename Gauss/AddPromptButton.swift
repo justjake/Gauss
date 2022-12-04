@@ -13,7 +13,9 @@ struct AddPromptButton: View {
     var body: some View {
         Button {
             let prompt = GaussPrompt()
-            document.prompts.append(prompt)
+            withAnimation(.default) {
+                document.prompts.append(prompt)
+            }
         } label: {
             Image(systemName: "plus.circle.fill")
                 .symbolRenderingMode(.hierarchical)

@@ -15,25 +15,29 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            VStack {
-                List {
-                    ForEach($document.prompts, editActions: .move) { $prompt in
-                        PromptView(
-                            prompt: $prompt,
-                            images: $document.images,
-                            document: $document
-                        )
-                    }
-                    .frame(alignment: .top)
-                    
-                    HStack {
-                        AddPromptButton(document: $document)
-                            .padding()
-                        Spacer()
-                    }
-                }.listStyle(.plain)
-            }
+            ScrollView {
 
+                VStack {
+                        ForEach($document.prompts, editActions: .move) { $prompt in
+                            PromptView(
+                                prompt: $prompt,
+                                images: $document.images,
+                                document: $document
+                            )
+                        }
+                        .frame(alignment: .top)
+                        
+                        HStack {
+                            Spacer()
+                            AddPromptButton(document: $document)
+                                .padding()
+                                .frame(minWidth: 600, alignment: .leading)
+                            Spacer()
+                        }
+                }.padding()
+                    .frame(maxWidth: .infinity)
+                
+            }
             
             VStack {
                 HStack {

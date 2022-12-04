@@ -7,12 +7,6 @@
 
 import SwiftUI
 
-//var width = 512
-//var height = 512
-//var guidance = 5
-//var steps = 10
-//var seed = GaussSeed.random
-
 struct PromptView: View {
     @Binding var prompt: GaussPrompt
     @Binding var images: GaussImages
@@ -31,7 +25,7 @@ struct PromptView: View {
     }
         
     var shouldFocusOnReveal: Bool {
-        let newestPrompt = document.prompts.max(by: { $0.createdAt > $1.createdAt })
+        let newestPrompt = document.prompts.max(by: { $0.createdAt < $1.createdAt })
         return newestPrompt?.id == prompt.id
     }
     
@@ -153,19 +147,14 @@ struct PromptView: View {
 
     
     var background: some View {
-        let gradient = Gradient(colors: [
-            Color(nsColor: NSColor.windowBackgroundColor),
-            Color(nsColor: NSColor.underPageBackgroundColor),
-        ])
-        
         let rect = RoundedRectangle(cornerRadius: 14, style: .continuous)
         let stroke = rect.strokeBorder(.separator)
-        let selectedStroke = rect.strokeBorder(.blue)
+        let selectedStroke = rect.strokeBorder(.blue, lineWidth: 2)
         let background = rect
             .fill(Color(nsColor: NSColor.windowBackgroundColor))
 //            .fill(.linearGradient(gradient, startPoint: .top, endPoint: .bottom))
             .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-        return background.overlay(selected ? AnyView(selectedStroke) : AnyView(stroke))
+        return background.overlay(selected || focused ? AnyView(selectedStroke) : AnyView(stroke))
     }
     
     func generateImage() {
@@ -178,16 +167,18 @@ struct PromptView: View {
     
     func copyPrompt() {
         var copy = self.prompt
-        let blank = GaussPrompt()
+        let defaults = GaussPrompt()
         
-        copy.id = blank.id
-        copy.createdAt = blank.createdAt
-        copy.results = blank.results
-        copy.favorite = blank.favorite
-        copy.hidden = blank.hidden
+        copy.id = defaults.id
+        copy.createdAt = defaults.createdAt
+        copy.results = defaults.results
+        copy.favorite = defaults.favorite
+        copy.hidden = defaults.hidden
         
         let position = self.document.prompts.firstIndex(where: { $0.id == self.prompt.id })
-        self.document.prompts.insert(copy, at: position ?? 0 + 1)
+        withAnimation(.default) {
+            self.document.prompts.insert(copy, at: (position ?? 0) + 1)
+        }
     }
     
     func saveResults(_ images: [CGImage?]) {
@@ -203,7 +194,12 @@ struct PromptView: View {
     }
     
     func delete() {
-        document.prompts.removeAll(where: { $0.id == prompt.id })
+        withAnimation(.default) {
+            document.prompts.removeAll(where: { $0.id == prompt.id })
+            if (document.prompts.isEmpty) {
+                document.prompts.append(GaussPrompt())
+            }
+        }
     }
 }
 
