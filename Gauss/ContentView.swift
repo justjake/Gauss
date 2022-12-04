@@ -7,33 +7,33 @@
 
 import SwiftUI
 
+let SINGLE_SELECTION = true
+
 struct ContentView: View {
     @Binding var document: GaussDocument
-    @Binding var dragging: GaussPrompt?
+    @State var dragging: GaussPrompt? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
-            ScrollView([.vertical]) {
-//                List(content: $document.prompts, editActions: .all) { $prompt in
-//
-//                }
-                VStack(spacing: 0) {
-                    ForEach($document.prompts) { $prompt in
-                            .onDrag {
-                                let item = NSItemProvider()
-                                dragging = $prompt.wrappedValue
-                                item.register($prompt.wrappedValue)
-                                return item
-                            }
+            VStack {
+                List {
+                    ForEach($document.prompts, editActions: .move) { $prompt in
+                        PromptView(
+                            prompt: $prompt,
+                            images: $document.images,
+                            document: $document
+                        )
                     }
-                    
-                    if (document.prompts.isEmpty) {
-                        AddPromptButton(document: $document)
-                    }
-                }.padding([.vertical])
                     .frame(alignment: .top)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            
+                    
+                    HStack {
+                        AddPromptButton(document: $document)
+                            .padding()
+                        Spacer()
+                    }
+                }.listStyle(.plain)
+            }
+
             
             VStack {
                 HStack {
@@ -97,8 +97,11 @@ struct ContentView_Previews: PreviewProvider {
 
         return GaussDocument(prompts: [prompt, negativePrompt])
     }
+    static var selected = Set([document.prompts.first?.id ?? UUID()])
     
     static var previews: some View {
-        ContentView(document: .constant(document)).environmentObject(kernel)
+        ContentView(
+            document: .constant(document)
+        ).environmentObject(kernel)
     }
 }

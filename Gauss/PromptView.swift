@@ -13,11 +13,11 @@ import SwiftUI
 //var steps = 10
 //var seed = GaussSeed.random
 
-
 struct PromptView: View {
     @Binding var prompt: GaussPrompt
     @Binding var images: GaussImages
     @Binding var document: GaussDocument
+    var selected: Bool = false
     @State private var jobs: [GenerateImageJob] = []
     @EnvironmentObject private var kernel: GaussKernel
     @FocusState private var focused
@@ -29,11 +29,7 @@ struct PromptView: View {
     var hasResults: Bool {
         return (jobs.count + prompt.results.count) > 0
     }
-    
-    var showAddButton: Bool {
-        return document.prompts.last?.id == prompt.id
-    }
-    
+        
     var shouldFocusOnReveal: Bool {
         let newestPrompt = document.prompts.max(by: { $0.createdAt > $1.createdAt })
         return newestPrompt?.id == prompt.id
@@ -41,17 +37,9 @@ struct PromptView: View {
     
     var body: some View {
         VStack {
-            HStack {
-                card
-                deleteButton
-            }
+            card
             if hasResults {
                 results
-            }
-            if showAddButton {
-                AddPromptButton(document: $document)
-                    .frame(maxWidth: 650, alignment: .leading)
-                    .padding()
             }
         }
     }
@@ -103,32 +91,32 @@ struct PromptView: View {
                     (Button {
                         self.generateImage()
                     } label: {
-                        VStack{
-                            Divider().opacity(0)
-                            HStack(spacing: 0) {
-                                Spacer()
-                                Text("Generate")
-                                Spacer()
-                            }
-                            Divider().opacity(0)
-                        }.contentShape(Rectangle())
-                    }).overlay(Divider(), alignment: .trailing)
+                        BottomBarButtonLabel {
+                            Text("Generate")
+                        }
+                    })
+                    
+                    Divider()
                     
                     Button {
                         self.copyPrompt()
                     } label: {
-                        VStack{
-                            Divider().opacity(0)
-                            HStack {
-                                Spacer()
-                                Text("Duplicate")
-                                Spacer()
-                            }
-                            Divider().opacity(0)
-                        }.contentShape(Rectangle())
-
+                        BottomBarButtonLabel {
+                            Text("Duplicate")
+                        }
                     }
-                }.buttonStyle(.borderless)
+                    
+                    Divider()
+                    
+                    Button {
+                        self.delete()
+                    } label: {
+                        BottomBarButtonLabel {
+                            Text("Delete").foregroundColor(.red)
+                        }
+                    }
+                }.fixedSize(horizontal: false, vertical: true)
+                .buttonStyle(.borderless)
                 Divider().opacity(0)
                 
                 
@@ -172,11 +160,12 @@ struct PromptView: View {
         
         let rect = RoundedRectangle(cornerRadius: 14, style: .continuous)
         let stroke = rect.strokeBorder(.separator)
+        let selectedStroke = rect.strokeBorder(.blue)
         let background = rect
             .fill(Color(nsColor: NSColor.windowBackgroundColor))
 //            .fill(.linearGradient(gradient, startPoint: .top, endPoint: .bottom))
             .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-        return background.overlay(stroke)
+        return background.overlay(selected ? AnyView(selectedStroke) : AnyView(stroke))
     }
     
     func generateImage() {
@@ -227,5 +216,22 @@ struct PromptView_Previews: PreviewProvider {
     static var previews: some View {
         PromptView(prompt: $prompt, images: .constant([:]), document: $doc).padding()
         
+    }
+}
+
+struct BottomBarButtonLabel<Content: View>: View {
+    var content: () -> Content
+    
+    var body: some View {
+        VStack{
+            Divider().opacity(0)
+            HStack(spacing: 0) {
+                Spacer()
+                content()
+                Spacer()
+                    
+            }
+            Divider().opacity(0)
+        }.contentShape(Rectangle())
     }
 }
