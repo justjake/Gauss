@@ -11,21 +11,40 @@ struct ContentView: View {
     @Binding var document: GaussDocument
 
     var body: some View {
-        VStack {
-            List {
-                ForEach($document.prompts) { $prompt in
-                    PromptView(prompt: $prompt, images: $document.images)
+        ZStack(alignment: .top) {
+            ScrollView([.vertical]) {
+                VStack(spacing: 0) {
+                    ForEach($document.prompts) { $prompt in
+                        PromptView(
+                            prompt: $prompt,
+                            images: $document.images,
+                            document: $document
+                        )
+                            .frame(maxWidth: 980)
+                            .padding([.horizontal, .bottom])
+                    }
+                    Button("Add Prompt") {
+                        let prompt = GaussPrompt()
+                        document.prompts.append(prompt)
+                    }
+                }.padding([.vertical])
+                    .frame(alignment: .top)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    KernelStatusView().padding().opacity(0.5)
                 }
+                Spacer()
             }
-            Button("New Prompt") {
-                let prompt = GaussPrompt()
-                document.prompts.append(prompt)
-            }
-        }
+        }.background(Rectangle().fill(.background))
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
+    static var kernel = GaussKernel()
     static var document: GaussDocument {
         var prompt = GaussPrompt()
         prompt.text = "A high tech solarpunk utopia in the Amazon rainforest"
@@ -37,6 +56,6 @@ struct ContentView_Previews: PreviewProvider {
     }
     
     static var previews: some View {
-        ContentView(document: .constant(document))
+        ContentView(document: .constant(document)).environmentObject(kernel)
     }
 }

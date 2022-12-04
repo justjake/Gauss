@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct GaussApp: App {
+    private let kernel = GaussKernel()
+    
+    init() {
+        kernel.preloadPipeline()
+    }
+    
     var body: some Scene {
         DocumentGroup(newDocument: GaussDocument()) { file in
-            ContentView(document: file.$document)
+            ContentView(document: file.$document).environmentObject(kernel)
         }
     }
 }

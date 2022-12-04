@@ -17,62 +17,170 @@ import SwiftUI
 struct PromptView: View {
     @Binding var prompt: GaussPrompt
     @Binding var images: GaussImages
-    @State var jobs: [GenerateImageJob] = []
+    @Binding var document: GaussDocument
+    @State private var jobs: [GenerateImageJob] = []
+    @EnvironmentObject private var kernel: GaussKernel
+    @FocusState private var focused
+    
+    var locked: Bool {
+        return prompt.results.count > 0 || jobs.count > 0
+    }
+    
+    var shouldFocusOnReveal: Bool {
+        let newestPrompt = document.prompts.max(by: { $0.createdAt > $1.createdAt })
+        return newestPrompt?.id == prompt.id
+    }
     
     var body: some View {
-        Form {
-            Section(header: Text("Prompt")) {
-                TextEditor(
-                    text: $prompt.text
-                ).textFieldStyle(.roundedBorder)
-                    .navigationTitle("Prompt")
-            }
-            
-            Section() {
-                Slider(value: $prompt.steps, in: 1...75, step: 1) {
-                    Text("Steps")
-                } minimumValueLabel: {
-                    Text("1")
-                } maximumValueLabel: {
-                    Text("75")
+        Group {
+        VStack {
+            /// Section for editing the prompt
+            Group {
+                TextField(
+                    "Prompt",
+                    text: $prompt.text,
+                    axis: .vertical
+                )
+                .onSubmit {
+                    generateImage()
                 }
-                Text(prompt.steps.formatted()).multilineTextAlignment(.center)
+                .focused($focused)
+                .task {
+                    if shouldFocusOnReveal {
+                        self.focused = true
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+                .navigationTitle("Prompt")
+                .padding([.horizontal, .top])
                 
-                Toggle("Safe", isOn: $prompt.safety)
-            }
+                HStack(spacing: 20) {
+                    Slider(value: $prompt.steps, in: 1...75, step: 1) {
+                        Text("Steps")
+                    } minimumValueLabel: {
+                        Text("1")
+                    } maximumValueLabel: {
+                        Text("75")
+                    }
+                    
+                    Toggle("Safe", isOn: $prompt.safety)
+                        .toggleStyle(.switch)
+                }.padding(.horizontal)
+                
+            }.disabled(locked)
             
-            Section() {
-                Button("Generate +", action: {
-                    self.generateImage()
-                }).buttonStyle(.borderedProminent)
+            /// Section for generating & reviewing images
+            VStack(spacing: 0) {
+                Divider()
+//                Rectangle().fill(.separator).frame(height: 1)
+                HStack(spacing: 0) {
+                    (Button {
+                        self.generateImage()
+                    } label: {
+                        VStack{
+                            Divider().opacity(0)
+                            HStack(spacing: 0) {
+                                Spacer()
+                                Text("Generate")
+                                Spacer()
+                            }
+                            Divider().opacity(0)
+                        }.contentShape(Rectangle())
+                    }).overlay(Divider(), alignment: .trailing)
+                    
+                    Button {
+                        self.copyPrompt()
+                    } label: {
+                        VStack{
+                            Divider().opacity(0)
+                            HStack {
+                                Spacer()
+                                Text("Duplicate")
+                                Spacer()
+                            }
+                            Divider().opacity(0)
+                        }.contentShape(Rectangle())
+
+                    }
+                }.buttonStyle(.borderless)
+                Divider().opacity(0)
                 
-                ScrollView(.horizontal) {
-                    LazyHStack {
-                        ForEach($jobs) { $job in
-                            ProgressView(job: job)
-                        }
-                        
-                        ForEach($prompt.results) { $result in
-                            ResultView(result: $result, images: $images)
+                
+                let hasResults = (jobs.count + prompt.results.count) > 0
+                if (hasResults) {
+                    ScrollView(.horizontal) {
+                        LazyHStack {
+                            ForEach($jobs) { $job in
+                                GaussProgressView(job: job)
+                            }
+                            
+                            ForEach($prompt.results) { $result in
+                                ResultView(result: $result, images: $images)
+                            }
                         }
                     }
                 }
             }
         }
+        }.background(background).frame(maxWidth: 600)
+    }
+    
+    var background: some View {
+        let gradient = Gradient(colors: [
+            Color(nsColor: NSColor.windowBackgroundColor),
+            Color(nsColor: NSColor.underPageBackgroundColor),
+        ])
+        
+        let rect = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let stroke = rect.strokeBorder(.separator)
+        let background = rect
+            .fill(Color(nsColor: NSColor.windowBackgroundColor))
+//            .fill(.linearGradient(gradient, startPoint: .top, endPoint: .bottom))
+            .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
+        return background.overlay(stroke)
     }
     
     func generateImage() {
-        let kernel = GaussKernel()
-        let job = kernel.generate(forPrompt: prompt)
+        let job = kernel.startGenerateImageJob(forPrompt: prompt) { results, job in
+            saveResults(results)
+            jobs.removeAll(where: { $0 === job })
+        }
         jobs.append(job)
+    }
+    
+    func copyPrompt() {
+        var copy = self.prompt
+        let blank = GaussPrompt()
+        
+        copy.id = blank.id
+        copy.createdAt = blank.createdAt
+        copy.results = blank.results
+        copy.favorite = blank.favorite
+        copy.hidden = blank.hidden
+        
+        let position = self.document.prompts.firstIndex(where: { $0.id == self.prompt.id })
+        self.document.prompts.insert(copy, at: position ?? 0 + 1)
+    }
+    
+    func saveResults(_ images: [CGImage?]) {
+        let saveable = renderableImageArray(from: images)
+        if saveable.count == 0 {
+            return
+        }
+        let first = saveable[0]
+        let imageId = UUID()
+        self.images[imageId.uuidString] = first
+        let result = GaussResult(promptId: prompt.id, imageId: imageId)
+        prompt.results.append(result)
     }
 }
 
 struct PromptView_Previews: PreviewProvider {
+    @State static var doc = GaussDocument()
     @State static var prompt = GaussPrompt()
     
     static var previews: some View {
-        PromptView(prompt: $prompt, images:  .constant([:]))
-            .previewLayout(.sizeThatFits)
+        PromptView(prompt: $prompt, images:  .constant([:]), document: $doc).padding()
+        
     }
 }

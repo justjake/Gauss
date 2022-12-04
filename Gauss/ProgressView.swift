@@ -8,18 +8,45 @@
 import SwiftUI
 
 extension Image {
-    func square() -> some View {
-        return self.resizable().frame(width: 512, height: 512)
+    func square(_ size: CGFloat = 256) -> some View {
+        return self.resizable().frame(width: size, height: size)
+    }
+}
+
+func renderableImageArray(from: [CGImage?]) -> [NSImage] {
+    return from.compactMap { maybeImage in
+        guard let image = maybeImage else {
+            return nil
+        }
+        
+        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+    }
+}
+
+struct ImageMessageView<Title: View, Content: View>: View {
+    var label: Title
+    var content: Content
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            self.label
+            Spacer()
+            self.content
+            Spacer()
+        }
+        .frame(width: 512, height: 512)
+        .cornerRadius(3)
     }
 }
 
 struct PendingImageView: View {
     var body: some View {
-        VStack {
-            Text("Pending...")
-            Image(systemName: "aqi.medium")
-                .square()
-        }.foregroundColor(.secondary)
+        ImageMessageView(
+            label: Text("Waiting to generate"),
+            content: ProgressView()
+                .frame(width: 256, height: 256)
+        ).foregroundColor(.secondary)
     }
 }
 
@@ -27,12 +54,11 @@ struct ImageError: View {
     var message: String
     
     var body: some View {
-        VStack {
-            Text("Error: \(message)")
-            Image(systemName: "exclamationmark.square.fill")
-                .square()
-                .border(.red)
-        }.foregroundColor(.red)
+        ImageMessageView(
+            label: Text("Error: \(message)"),
+            content: Image(systemName: "exclamationmark.square.fill").square()
+        ).foregroundColor(.red)
+            .border(.red)
     }
 }
 
@@ -50,12 +76,11 @@ struct FirstCGImageView: View {
 
 struct MissingImage: View {
     var body: some View {
-        VStack {
-            Text("No image data")
-            Image(systemName: "questionmark.square.dashed")
-                .square()
-                .border(.yellow)
-        }.foregroundColor(.yellow)
+        ImageMessageView(
+            label: Text("No image data"),
+            content: Image(systemName: "questionmark.square.dashed").square()
+        ).foregroundColor(.yellow)
+            .border(.yellow)
     }
 }
 
@@ -70,7 +95,7 @@ struct CGImageView: View {
             )
             
             Image(nsImage: nsImage)
-                .square()
+                .square(512)
         } else {
             MissingImage()
         }
@@ -78,7 +103,7 @@ struct CGImageView: View {
     }
 }
 
-struct ProgressView: View {
+struct GaussProgressView: View {
     @ObservedObject var job: GenerateImageJob
     
     var body: some View {
@@ -100,7 +125,21 @@ struct ProgressView: View {
 
 struct ProgressView_Previews: PreviewProvider {
     static var previews: some View {
-        let job = GenerateImageJob(GaussPrompt())
-        ProgressView(job: job)
+        let job = GenerateImageJob(GaussPrompt(), {_,_ in })
+        
+        Group {
+            CGImageView(cgimage: nil)
+                .previewDisplayName("Missing image")
+            
+            FirstCGImageView(images: [])
+                .previewDisplayName("Empty image array")
+            
+            ImageError(message: "Unknown error occured")
+                .previewDisplayName("Error")
+            
+            GaussProgressView(job: job)
+                .previewDisplayName("Pending job")
+            
+        }
     }
 }
