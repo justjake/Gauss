@@ -9,28 +9,31 @@ import SwiftUI
 
 struct ContentView: View {
     @Binding var document: GaussDocument
+    @Binding var dragging: GaussPrompt?
 
     var body: some View {
         ZStack(alignment: .top) {
             ScrollView([.vertical]) {
+//                List(content: $document.prompts, editActions: .all) { $prompt in
+//
+//                }
                 VStack(spacing: 0) {
                     ForEach($document.prompts) { $prompt in
-                        PromptView(
-                            prompt: $prompt,
-                            images: $document.images,
-                            document: $document
-                        )
-                            .frame(maxWidth: 980)
-                            .padding([.horizontal, .bottom])
+                            .onDrag {
+                                let item = NSItemProvider()
+                                dragging = $prompt.wrappedValue
+                                item.register($prompt.wrappedValue)
+                                return item
+                            }
                     }
-                    Button("Add Prompt") {
-                        let prompt = GaussPrompt()
-                        document.prompts.append(prompt)
+                    
+                    if (document.prompts.isEmpty) {
+                        AddPromptButton(document: $document)
                     }
                 }.padding([.vertical])
                     .frame(alignment: .top)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
-
+            
             
             VStack {
                 HStack {
@@ -41,6 +44,46 @@ struct ContentView: View {
             }
         }.background(Rectangle().fill(.background))
     }
+}
+
+extension DropInfo {
+    
+}
+
+struct PromptDropDelegate: DropDelegate {
+    var dropTarget: GaussPrompt
+    @Binding var dragging: GaussPrompt?
+    @Binding var document: GaussDocument
+        
+    func dropEntered(info: DropInfo) {
+        if (!info.hasItemsConforming(to: [.gaussPromptId])) {
+            return
+        }
+        
+        guard let draggingOwnItem = dragging else {
+            return
+        }
+        
+        if draggingOwnItem.id == dropTarget.id {
+            return
+        }
+        
+        let from = document.prompts.firstIndex { $0.id == dropTarget.id }
+        let to = document.prompts.firstIndex { $0.id == dropTarget.id }
+        
+        
+        
+        
+    }
+    
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return false
+        
+    }
+    
+    
+    
 }
 
 struct ContentView_Previews: PreviewProvider {

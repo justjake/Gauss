@@ -12,6 +12,14 @@ extension UTType {
     static var gaussNotebook: UTType {
         UTType(exportedAs: "tl.jake.gauss.notebook", conformingTo: .package)
     }
+    
+    static var gaussPrompt: UTType {
+        UTType(exportedAs: "tl.jake.gauss.prompt", conformingTo: .json)
+    }
+    
+    static var gaussPromptId: UTType {
+        UTType(exportedAs: "tl.jake.gauss.id", conformingTo: .json)
+    }
 }
 
 enum GaussSeed: Codable {
@@ -19,7 +27,18 @@ enum GaussSeed: Codable {
     case fixed(Int)
 }
 
-struct GaussPrompt: Identifiable, Codable {
+struct GaussPromptId: Codable {
+    let ID: UUID
+}
+
+extension GaussPromptId: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .gaussPromptId)
+    }
+}
+
+
+struct GaussPrompt: Identifiable, Codable, Sendable {
     // App concerns
     var id = UUID()
     var createdAt = Date.now
@@ -39,6 +58,18 @@ struct GaussPrompt: Identifiable, Codable {
     
     var width = 512
     var height = 512
+}
+
+extension GaussPrompt: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .gaussPrompt)
+        ProxyRepresentation(exporting: \.text) { GaussPrompt(text: $0) }
+        ProxyRepresentation(exporting: \.promptId) // TODO: flumoxed by .visibility
+    }
+    
+    var promptId: GaussPromptId {
+        GaussPromptId(ID: id)
+    }
 }
 
 struct GaussResult: Identifiable, Codable {

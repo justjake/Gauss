@@ -20,6 +20,7 @@
 		C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AE293BD460005CEE6D /* GaussKernel.swift */; };
 		C161F20F293C0D28007F518C /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = C161F20E293C0D28007F518C /* Resources */; };
 		C161F211293C31DF007F518C /* KernelStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F210293C31DF007F518C /* KernelStatusView.swift */; };
+		C161F213293C945F007F518C /* AddPromptButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F212293C945F007F518C /* AddPromptButton.swift */; };
 		C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1825333293BFBFB0038E152 /* StableDiffusion */; };
 		C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1825335293BFE1A0038E152 /* ProgressView.swift */; };
 /* End PBXBuildFile section */
@@ -60,6 +61,7 @@
 		C10A46AE293BD460005CEE6D /* GaussKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussKernel.swift; sourceTree = "<group>"; };
 		C161F20E293C0D28007F518C /* Resources */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = folder; name = Resources; path = "ml-stable-diffusion/build/sd2-base/Resources"; sourceTree = SOURCE_ROOT; };
 		C161F210293C31DF007F518C /* KernelStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KernelStatusView.swift; sourceTree = "<group>"; };
+		C161F212293C945F007F518C /* AddPromptButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPromptButton.swift; sourceTree = "<group>"; };
 		C1825331293BFB000038E152 /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "ml-stable-diffusion"; sourceTree = "<group>"; };
 		C1825335293BFE1A0038E152 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -126,6 +128,7 @@
 				C10A4683293B1910005CEE6D /* Gauss.entitlements */,
 				C10A4684293B1910005CEE6D /* Preview Content */,
 				C10A46A8293BB0C9005CEE6D /* PromptView.swift */,
+				C161F212293C945F007F518C /* AddPromptButton.swift */,
 				C1825335293BFE1A0038E152 /* ProgressView.swift */,
 				C10A46AA293BC512005CEE6D /* ResultView.swift */,
 			);
@@ -312,6 +315,7 @@
 				C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */,
 				C10A467B293B190F005CEE6D /* GaussApp.swift in Sources */,
 				C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */,
+				C161F213293C945F007F518C /* AddPromptButton.swift in Sources */,
 				C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */,
 				C10A467F293B190F005CEE6D /* ContentView.swift in Sources */,
 			);

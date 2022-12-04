@@ -26,12 +26,37 @@ struct PromptView: View {
         return prompt.results.count > 0 || jobs.count > 0
     }
     
+    var hasResults: Bool {
+        return (jobs.count + prompt.results.count) > 0
+    }
+    
+    var showAddButton: Bool {
+        return document.prompts.last?.id == prompt.id
+    }
+    
     var shouldFocusOnReveal: Bool {
         let newestPrompt = document.prompts.max(by: { $0.createdAt > $1.createdAt })
         return newestPrompt?.id == prompt.id
     }
     
     var body: some View {
+        VStack {
+            HStack {
+                card
+                deleteButton
+            }
+            if hasResults {
+                results
+            }
+            if showAddButton {
+                AddPromptButton(document: $document)
+                    .frame(maxWidth: 650, alignment: .leading)
+                    .padding()
+            }
+        }
+    }
+    
+    var card: some View {
         Group {
         VStack {
             /// Section for editing the prompt
@@ -50,12 +75,13 @@ struct PromptView: View {
                         self.focused = true
                     }
                 }
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .font(Font.headline)
                 .navigationTitle("Prompt")
                 .padding([.horizontal, .top])
                 
                 HStack(spacing: 20) {
-                    Slider(value: $prompt.steps, in: 1...75, step: 1) {
+                    Slider(value: $prompt.steps, in: 1...75, step: 5) {
                         Text("Steps")
                     } minimumValueLabel: {
                         Text("1")
@@ -106,24 +132,37 @@ struct PromptView: View {
                 Divider().opacity(0)
                 
                 
-                let hasResults = (jobs.count + prompt.results.count) > 0
                 if (hasResults) {
-                    ScrollView(.horizontal) {
-                        LazyHStack {
-                            ForEach($jobs) { $job in
-                                GaussProgressView(job: job)
-                            }
-                            
-                            ForEach($prompt.results) { $result in
-                                ResultView(result: $result, images: $images)
-                            }
-                        }
-                    }
                 }
             }
         }
         }.background(background).frame(maxWidth: 600)
     }
+    
+    var results: some View {
+        ScrollView(.horizontal) {
+            LazyHStack {
+                ForEach($jobs) { $job in
+                    GaussProgressView(job: job)
+                }
+                
+                ForEach($prompt.results) { $result in
+                    ResultView(result: $result, images: $images)
+                }
+            }
+        }
+    }
+    
+    var deleteButton: some View {
+        Button {
+            self.delete()
+        } label: {
+            Image(systemName: "xmark").imageScale(.large)
+        }.padding()
+            .buttonStyle(.borderless)
+            .contentShape(Circle())
+    }
+
     
     var background: some View {
         let gradient = Gradient(colors: [
@@ -173,14 +212,20 @@ struct PromptView: View {
         let result = GaussResult(promptId: prompt.id, imageId: imageId)
         prompt.results.append(result)
     }
+    
+    func delete() {
+        document.prompts.removeAll(where: { $0.id == prompt.id })
+    }
 }
 
 struct PromptView_Previews: PreviewProvider {
-    @State static var doc = GaussDocument()
-    @State static var prompt = GaussPrompt()
+    @State static var doc = GaussDocument(prompts: [
+        GaussPrompt()
+    ])
+    @State static var prompt = doc.prompts.first!
     
     static var previews: some View {
-        PromptView(prompt: $prompt, images:  .constant([:]), document: $doc).padding()
+        PromptView(prompt: $prompt, images: .constant([:]), document: $doc).padding()
         
     }
 }
