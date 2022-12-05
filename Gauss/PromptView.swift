@@ -15,6 +15,7 @@ struct PromptView: View {
     var canGenerate: Bool = true
     var canDelete: Bool = true
     var canDuplicate: Bool = true
+    @State private var batchSize = 1
     @State private var jobs: [GenerateImageJob] = []
     @EnvironmentObject private var kernel: GaussKernel
     @FocusState private var focused
@@ -71,13 +72,20 @@ struct PromptView: View {
                 Divider()
                 HStack(spacing: 0) {
                     if canGenerate {
-                        (Button {
-                            self.generateImage()
-                        } label: {
-                            BottomBarButtonLabel {
+                        BottomBarButtonLabel {
+                            HStack {
                                 Text("Generate")
+                                Button("1") {
+                                    generateImage(1)
+                                }
+                                Button("4") {
+                                    generateImage(4)
+                                }
+                                Button("9") {
+                                    generateImage(9)
+                                }
                             }
-                        })
+                        }
                     }
                     
                     if canGenerate && canDuplicate {
@@ -114,7 +122,7 @@ struct PromptView: View {
             axis: .vertical
         )
         .onSubmit {
-            generateImage()
+            generateImage(1)
         }
         .focused($focused)
         .task {
@@ -160,14 +168,20 @@ struct PromptView: View {
     }
     
     var results: some View {
-        ScrollView(.horizontal) {
-            LazyHStack {
-                ForEach($jobs) { $job in
-                    GaussProgressView(job: job)
-                }
-                
-                ForEach($prompt.results) { $result in
-                    ResultView(result: $result, images: $images)
+        ScrollViewReader { scroller in
+            ScrollView(.horizontal) {
+                LazyHStack {
+                    ForEach($prompt.results) { $result in
+                        ResultView(result: $result, images: $images).onAppear {
+                            scroller.scrollTo(result.id)
+                        }.id(result.id)
+                    }
+                    
+                    ForEach($jobs) { $job in
+                        GaussProgressView(job: job).onAppear {
+                            scroller.scrollTo(job.id)
+                        }.id(job.id)
+                    }
                 }
             }
         }
@@ -190,17 +204,20 @@ struct PromptView: View {
         let selectedStroke = rect.strokeBorder(.blue, lineWidth: 2)
         let background = rect
             .fill(Color(nsColor: NSColor.windowBackgroundColor))
-//            .fill(.linearGradient(gradient, startPoint: .top, endPoint: .bottom))
             .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
         return background.overlay(selected || focused ? AnyView(selectedStroke) : AnyView(stroke))
     }
     
-    func generateImage() {
-        let job = kernel.startGenerateImageJob(forPrompt: prompt) { results, job in
-            saveResults(results)
-            jobs.removeAll(where: { $0 === job })
+    func generateImage(_ count: Int) {
+        let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { results, job in
+            withAnimation(.default) {
+                saveResults(results)
+                jobs.removeAll(where: { $0 === job })
+            }
         }
-        jobs.append(job)
+        withAnimation(.default) {
+            jobs.append(job)
+        }
     }
     
     func copyPrompt() {
@@ -220,14 +237,16 @@ struct PromptView: View {
     }
     
     func saveResults(_ images: [CGImage?]) {
-        let saveable = renderableImageArray(from: images)
-        if saveable.count == 0 {
-            return
+        var ids: [UUID] = []
+        for image in images {
+            let id = UUID()
+            ids.append(id)
+            guard let nsImage = image?.asNSImage() else {
+                continue
+            }
+            self.images[id.uuidString] = nsImage
         }
-        let first = saveable[0]
-        let imageId = UUID()
-        self.images[imageId.uuidString] = first
-        let result = GaussResult(promptId: prompt.id, imageId: imageId)
+        let result = GaussResult(promptId: prompt.id, imageIds: ids)
         prompt.results.append(result)
     }
     
@@ -235,7 +254,9 @@ struct PromptView: View {
         withAnimation(.default) {
             document.prompts.removeAll(where: { $0.id == prompt.id })
             for result in prompt.results {
-                document.images.removeValue(forKey: result.imageId.uuidString)
+                for imageId in result.imageIds {
+                    document.images.removeValue(forKey: imageId.uuidString)
+                }
             }
             
             if (document.prompts.isEmpty) {

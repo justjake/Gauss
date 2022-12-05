@@ -124,7 +124,7 @@ struct GaussProgressView: View {
             }
         case .progress(let images, let progress):
             ZStack {
-                FirstCGImageView(images: images)
+                CGImageGridView(images: images)
                 VStack {
                     Text("\(progress.step) / \(progress.stepCount)")
                     Button("Cancel") {
@@ -140,7 +140,7 @@ struct GaussProgressView: View {
 
 struct ProgressView_Previews: PreviewProvider {
     static var previews: some View {
-        let job = GenerateImageJob(GaussPrompt(), {_,_ in })
+        let job = GenerateImageJob(GaussPrompt(), count: 1, {_,_ in })
         
         Group {
             CGImageView(cgimage: nil)

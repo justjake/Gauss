@@ -43,7 +43,7 @@ enum GaussModel: Hashable, Equatable, Codable {
     case sd1_5
     case custom(URL)
     
-    static var Default: GaussModel = .sd2
+    static var Default: GaussModel = .sd1_5
 }
 
 
@@ -86,7 +86,7 @@ struct GaussResult: Identifiable, Codable {
     var id = UUID()
     var createdAt = Date.now
     var promptId: UUID
-    var imageId: UUID
+    var imageIds: [UUID]
     
     var title: String? = nil
     var favorite = false

@@ -20,12 +20,14 @@ enum GenerateImageState {
 class GenerateImageJob : ObservableObject, Identifiable {
     typealias CompletionHandler = ([CGImage?], GenerateImageJob) -> Void
     let id = UUID()
+    let count: Int
     let prompt: GaussPrompt
     let completionHandler: CompletionHandler
     @Published var cancelled = false
     @Published var state: GenerateImageState = .pending
-    init(_ prompt: GaussPrompt, _ completionHandler: @escaping CompletionHandler) {
+    init(_ prompt: GaussPrompt, count: Int, _ completionHandler: @escaping CompletionHandler) {
         self.prompt = prompt
+        self.count = count
         self.completionHandler = completionHandler
     }
 }
@@ -134,9 +136,10 @@ class GaussKernel : ObservableObject {
     
     func startGenerateImageJob(
         forPrompt: GaussPrompt,
+        count: Int,
         completionHandler: @escaping GenerateImageJob.CompletionHandler
     ) -> GenerateImageJob  {
-        let job = GenerateImageJob(forPrompt, completionHandler)
+        let job = GenerateImageJob(forPrompt, count: count, completionHandler)
         self.jobs[job.id] = job
         print("About to enqueue work")
         queue.async {
@@ -158,7 +161,7 @@ class GaussKernel : ObservableObject {
             sampleTimer.start()
             let result = try pipeline.generateImages(
                 prompt: job.prompt.text,
-                imageCount: 1,
+                imageCount: job.count,
                 stepCount: Int(job.prompt.steps),
                 seed: {
                     switch job.prompt.seed {

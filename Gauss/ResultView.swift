@@ -19,33 +19,17 @@ struct ResultView: View {
     @Binding var result: GaussResult
     @Binding var images: GaussImages
     
-    var image: NSImage? {
-        return images[result.imageId.uuidString]
-    }
     
     var body: some View {
-        VStack {
-            HStack {
-                Text("ImageID: \(result.imageId)")
-                Toggle("Favorite", isOn: $result.favorite)
-
-            }
-            if (image != nil) {
-                Image(nsImage: image!)
-                    .fixedSize()
-                    .onDrag {
-                        let provider = NSItemProvider()
-                        provider.register(image!)
-                        return provider
-                    }
-            }
+        let nsImages = result.imageIds.map { id in
+            return images[id.uuidString]
         }
-
+        NSImageGridView(images: nsImages)
     }
 }
 
 struct ResultView_Previews: PreviewProvider {
-    @State static var result = GaussResult(promptId: UUID(), imageId: UUID())
+    @State static var result = GaussResult(promptId: UUID(), imageIds: [UUID()])
     
     static var previews: some View {
         ResultView(result: $result, images: .constant([:]))
