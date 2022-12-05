@@ -15,32 +15,39 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            ScrollViewReader { scroller in
-                ScrollView {
-                    VStack {
-                            ForEach($document.prompts, editActions: .move) { $prompt in
-                                PromptView(
-                                    prompt: $prompt,
-                                    images: $document.images,
-                                    document: $document
-                                ).id(prompt.id)
-//                                    .onAppear {
-//                                    withAnimation {
-//                                        scroller.scrollTo(prompt.id)
-//                                    }
-//                                }
-                            }
-                            .frame(alignment: .top)
-                            
-                            HStack {
-                                Spacer()
-                                AddPromptButton(document: $document)
-                                    .padding()
-                                    .frame(minWidth: 600, alignment: .trailing)
-                            }
-                    }.frame(maxWidth: .infinity)
+            VStack {
+                ScrollViewReader { scroller in
+                    ScrollView {
+                        VStack {
+                                ForEach($document.prompts, editActions: .move) { $prompt in
+                                    PromptView(
+                                        prompt: $prompt,
+                                        images: $document.images,
+                                        document: $document
+                                    ).id(prompt.id)
+    //                                    .onAppear {
+    //                                    withAnimation {
+    //                                        scroller.scrollTo(prompt.id)
+    //                                    }
+    //                                }
+                                }
+                                .frame(alignment: .top)
+                                
+                                HStack {
+                                    Spacer()
+                                    AddPromptButton(document: $document)
+                                        .padding()
+                                        .frame(minWidth: 600, alignment: .trailing)
+                                }
+                        }.frame(maxWidth: .infinity)
+                    }
                 }
+                
+                Divider()
+                
+                
             }
+
 
             
             VStack {

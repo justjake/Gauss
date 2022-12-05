@@ -13,7 +13,6 @@ struct PromptView: View {
     @Binding var document: GaussDocument
     var selected: Bool = false
     var canGenerate: Bool = true
-    var canDelete: Bool = true
     var canDuplicate: Bool = true
     @State private var batchSize = 1
     @State private var jobs: [GenerateImageJob] = []
@@ -23,6 +22,10 @@ struct PromptView: View {
     
     var locked: Bool {
         return prompt.results.count > 0 || jobs.count > 0
+    }
+    
+    var canDelete: Bool {
+        return locked
     }
     
     var hasResults: Bool {
@@ -51,8 +54,12 @@ struct PromptView: View {
         VStack {
             /// Section for editing the prompt
             Group {
-                HStack(spacing: 20) {
-                    promptTextField.disabled(locked)
+                HStack(alignment: .top, spacing: 20) {
+                    if locked {
+                        Text(prompt.text).frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        promptTextField.disabled(locked)
+                    }
                     if canDelete {
                         deleteButton
                     }
@@ -62,51 +69,49 @@ struct PromptView: View {
             }
             
             /// Section for generating & reviewing images
-            VStack(spacing: 0) {
-                Divider()
-                HStack(spacing: 0) {
-                    if canGenerate {
-                        BottomBarButtonLabel {
-                            HStack {
-                                Text("Generate")
-                                Button("1") {
-                                    generateImage(1)
-                                }
-                                Button("4") {
-                                    generateImage(4)
-                                }
-                                Button("9") {
-                                    generateImage(9)
-                                }
-                            }
-                        }
-                    }
-                    
-                    if canGenerate && canDuplicate {
-                        Divider()
-                    }
-                    
-                    if canDuplicate {
-                        Button {
-                            self.insertDuplicateAfterSelf()
-                        } label: {
+            if locked {
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack(spacing: 0) {
+                        if canGenerate {
                             BottomBarButtonLabel {
-                                Text("Duplicate and edit")
+                                HStack {
+                                    Text("Generate")
+                                    Button("1") {
+                                        generateImage(1)
+                                    }
+                                    Button("4") {
+                                        generateImage(4)
+                                    }
+                                    Button("9") {
+                                        generateImage(9)
+                                    }
+                                }
                             }
                         }
-                    }
-
-                    
-                }.fixedSize(horizontal: false, vertical: true)
-                    .buttonStyle(.borderless)
-                Divider().opacity(0)
-                
-                
-                if (hasResults) {
+                        
+                        if canGenerate && canDuplicate {
+                            Divider()
+                        }
+                        
+                        if canDuplicate {
+                            Button {
+                                self.insertDuplicateAfterSelf()
+                            } label: {
+                                BottomBarButtonLabel {
+                                    Text("Duplicate and edit")
+                                }
+                            }
+                        }
+                    }.fixedSize(horizontal: false, vertical: true)
+                        .buttonStyle(.borderless)
+                    Divider().opacity(0)
                 }
+            } else {
+                Rectangle().frame(height: 8).foregroundColor(.clear)
             }
         }
-        }.background(background).frame(maxWidth: 600)
+        }.background(.quaternary, in: GaussStyle.rectLarge).frame(maxWidth: 600)
     }
     
     var promptTextField: some View {
@@ -149,16 +154,6 @@ struct PromptView: View {
             .contentShape(Circle())
     }
 
-    
-    var background: some View {
-        let rect = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        let stroke = rect.strokeBorder(.separator)
-        let selectedStroke = rect.strokeBorder(.blue, lineWidth: 2)
-        let background = rect
-            .fill(Color(nsColor: NSColor.windowBackgroundColor))
-            .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 2)
-        return background.overlay(selected || focused ? AnyView(selectedStroke) : AnyView(stroke))
-    }
     
     func generateImage(_ count: Int) {
         let willBecomeLocked = !locked
@@ -278,9 +273,9 @@ struct PromptInputView: View {
     
     var body: some View {
         
-        let rect = RoundedRectangle(cornerRadius: submitButtonSize / 2, style: .circular)
+        let rect = RoundedRectangle(cornerRadius: (submitButtonSize + 1) / 2, style: .circular)
         let stroke = rect.strokeBorder(.tertiary)
-        HStack {
+        HStack(alignment: .bottom) {
             TextField(
                 "Prompt",
                 text: $text,
@@ -290,10 +285,12 @@ struct PromptInputView: View {
             .textFieldStyle(.plain)
             .navigationTitle("Prompt")
             .fixedSize(horizontal: false, vertical: true)
+            .padding([.top, .bottom], 4)
             
             accessory.frame(alignment: .bottomTrailing)
         }.padding(EdgeInsets(top: inputPadding, leading: submitButtonSize / 3, bottom: inputPadding, trailing: 2))
         .overlay(stroke)
+        .frame(alignment: .bottom)
         
     }
     
@@ -313,7 +310,6 @@ struct PromptInputView: View {
             .background(.blue, in: Circle())
         }.padding(.trailing, 2)
     }
-    
 }
 
 struct PromptView_Previews: PreviewProvider {
@@ -322,12 +318,23 @@ struct PromptView_Previews: PreviewProvider {
     ])
     @State static var prompt = doc.prompts.first!
     
+    static let shortPrompt = "Flamingos wearing plate armor"
+    static let longPrompt = "Flamingos wearing plate armor, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls!"
+    
     static var previews: some View {
         PromptView(prompt: $prompt, images: .constant([:]), document: $doc).padding()
         
-        PromptInputView(text: .constant("Flamingos wearing plate armor"), count: .constant(4), onSubmit: {}).previewDisplayName("Input")
+        PromptView(prompt: .constant(GaussPrompt(
+            results: [GaussResult(promptId: UUID(), images: [GaussImageRef()])], text: longPrompt
+        )), images: .constant([:]), document: $doc).padding().previewDisplayName("Prompt with result")
+
         
-        PromptInputView(text: .constant("Flamingos wearing plate armor, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls!"), count: .constant(4), onSubmit: {}).previewDisplayName("Long input")
+        PromptView(prompt: .constant(GaussPrompt(text: longPrompt)), images: .constant([:]), document: $doc).padding().previewDisplayName("Long prompt")
+
+        
+        PromptInputView(text: .constant(shortPrompt), count: .constant(4), onSubmit: {}).previewDisplayName("Input")
+        
+        PromptInputView(text: .constant(longPrompt), count: .constant(4), onSubmit: {}).previewDisplayName("Long input")
 
         
     }
