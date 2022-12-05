@@ -17,6 +17,7 @@ struct PromptView: View {
     var canDuplicate: Bool = true
     @State private var batchSize = 1
     @State private var jobs: [GenerateImageJob] = []
+    @State private var count = 1
     @EnvironmentObject private var kernel: GaussKernel
     @FocusState private var focused
     
@@ -57,19 +58,7 @@ struct PromptView: View {
                     }
                 }.padding([.horizontal, .top])
                 
-                Group {
-                    HStack(spacing: 20) {
-                        stepsSlider
-                        Toggle("Safe", isOn: $prompt.safety)
-                            .toggleStyle(.switch)
-                            .help(Text("If enabled, try to hide images that contain unsafe content. Often removes progress results."))
-                    }.padding(.horizontal)
-                    
-                    HStack(spacing: 20) {
-                        guidanceSlider
-                        modelPicker
-                    }.padding(.horizontal)
-                }.disabled(locked)
+                PromptSettingsView(prompt: $prompt).disabled(locked)
             }
             
             /// Section for generating & reviewing images
@@ -99,10 +88,10 @@ struct PromptView: View {
                     
                     if canDuplicate {
                         Button {
-                            self.copyPrompt()
+                            self.insertDuplicateAfterSelf()
                         } label: {
                             BottomBarButtonLabel {
-                                Text("Duplicate")
+                                Text("Duplicate and edit")
                             }
                         }
                     }
@@ -121,71 +110,29 @@ struct PromptView: View {
     }
     
     var promptTextField: some View {
-        TextField(
-            "Prompt",
-            text: $prompt.text,
-            axis: .vertical
-        )
-        .onSubmit {
-            generateImage(1)
+        PromptInputView(text: $prompt.text, count: $count) {
+            generateImage(count)
         }
-        .focused($focused)
-        .task {
-            if shouldFocusOnReveal {
-                self.focused = true
-            }
-        }
-        .textFieldStyle(.plain)
-        .font(Font.headline)
-        .navigationTitle("Prompt")
-        .fixedSize(horizontal: false, vertical: true)
     }
     
-    var stepsSlider: some View {
-        Slider(value: $prompt.steps, in: 1...75, step: 5) {
-        } minimumValueLabel: {
-            Text("Speed")
-        } maximumValueLabel: {
-            Text("Quality")
-        }.help(Text("Number of diffusion steps to perform"))
-    }
     
-    var guidanceSlider: some View {
-        Slider(value: $prompt.guidance, in: 0...20) {
-        } minimumValueLabel: {
-            Text("Creative")
-        } maximumValueLabel: {
-            Text("Predictable")
-        }.help(Text("Guidance factor; set to zero for random output"))
-    }
-    
-    var modelPicker: some View {
-        Picker("Model", selection: $prompt.model) {
-            Text("SD 2.0").tag(GaussModel.sd2).help(Text("Stable Diffusion 2.0 Base"))
-            Text("SD 1.5").tag(GaussModel.sd1_5).help(Text("Stable Diffusion 1.5"))
-            Text("SD 1.4").tag(GaussModel.sd1_4).help(Text("Stable Diffusion 1.4"))
-            // TODO: support custom models
-        }
-        .fixedSize()
-            .onChange(of: prompt.model) { model in
-                kernel.preloadPipeline(prompt.model)
-            }
-    }
     
     var results: some View {
         ScrollViewReader { scroller in
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 1) {
                     ForEach($prompt.results) { $result in
-                        ResultView(result: $result, images: $images).onAppear {
-//                            scroller.scrollTo(result.id)
-                        }.id(result.id)
+                        ResultView(result: $result, images: $images)
+                            .id(result.id)
+                            .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
+                            .frame(height: .resultSize)
                     }
                     
                     ForEach($jobs) { $job in
-                        GaussProgressView(job: job).onAppear {
-//                            scroller.scrollTo(job.id)
-                        }.id(job.id)
+                        GaussProgressView(job: job)
+                            .id(job.id)
+                            .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
+                            .frame(height: .resultSize)
                     }
                 }
             }
@@ -216,27 +163,22 @@ struct PromptView: View {
     func generateImage(_ count: Int) {
         let willBecomeLocked = !locked
         let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { results, job in
-            saveResults(results)
+            if !job.cancelled {
+                saveResults(results)
+            }
             jobs.removeAll(where: { $0.id == job.id })
             kernel.jobs.removeValue(forKey: job.id)
         }
         withAnimation(.default) {
             jobs.append(job)
             if willBecomeLocked {
-                copyPrompt()
+                insertDuplicateAfterSelf()
             }
         }
     }
     
-    func copyPrompt() {
-        var copy = self.prompt
-        let defaults = GaussPrompt()
-        
-        copy.id = defaults.id
-        copy.createdAt = defaults.createdAt
-        copy.results = defaults.results
-        copy.favorite = defaults.favorite
-        copy.hidden = defaults.hidden
+    func insertDuplicateAfterSelf() {
+        let copy = self.prompt.clone()
         
         let position = self.document.prompts.firstIndex(where: { $0.id == self.prompt.id })
         withAnimation(.default) {
@@ -245,19 +187,21 @@ struct PromptView: View {
     }
     
     func saveResults(_ images: [CGImage?]) {
-        var ids: [UUID] = []
+        var imageRefs: [GaussImageRef] = []
         for image in images {
-            let id = UUID()
-            ids.append(id)
+            var ref = GaussImageRef()
             guard let nsImage = image?.asNSImage() else {
+                ref.unsafe = true
+                imageRefs.append(ref)
                 continue
             }
-            self.images[id.uuidString] = nsImage
+            self.images.addImage(ref: ref, nsImage)
+            imageRefs.append(ref)
         }
-        let result = GaussResult(promptId: prompt.id, imageIds: ids)
+        let result = GaussResult(promptId: prompt.id, images: imageRefs)
         prompt.results.append(result)
     }
-    
+        
     func delete() {
         if (document.prompts.count == 1) {
             document.prompts.append(GaussPrompt())
@@ -265,12 +209,111 @@ struct PromptView: View {
         
         let ownPrompt = self.prompt
         document.prompts.removeAll(where: { $0.id == ownPrompt.id })
-        for result in ownPrompt.results {
-            for imageId in result.imageIds {
-                document.images.removeValue(forKey: imageId.uuidString)
-            }
+        document.images.removePrompt(ownPrompt)
+    }
+}
+
+struct PromptSettingsView: View {
+    @Binding var prompt: GaussPrompt
+    @EnvironmentObject var kernel: GaussKernel
+    
+    var body: some View {
+        VStack {
+            HStack(spacing: 20) {
+                stepsSlider
+            }.padding(.horizontal)
+            
+            HStack(spacing: 20) {
+                guidanceSlider
+                modelPicker
+            }.padding(.horizontal)
         }
     }
+    
+    var modelPicker: some View {
+        Picker("Model", selection: $prompt.model) {
+            Text("SD 2.0").tag(GaussModel.sd2).help(Text("Stable Diffusion 2.0 Base"))
+            Text("SD 1.5").tag(GaussModel.sd1_5).help(Text("Stable Diffusion 1.5"))
+            Text("SD 1.4").tag(GaussModel.sd1_4).help(Text("Stable Diffusion 1.4"))
+            // TODO: support custom models
+        }
+        .fixedSize()
+            .onChange(of: prompt.model) { model in
+                kernel.preloadPipeline(prompt.model)
+            }
+    }
+    
+    var safetyToggle: some View {
+        Toggle("Safe", isOn: $prompt.safety)
+            .toggleStyle(.switch)
+            .help(Text("If enabled, try to hide images that contain unsafe content. Often removes progress results."))
+    }
+    
+    var stepsSlider: some View {
+        Slider(value: $prompt.steps, in: 1...75, step: 5) {
+        } minimumValueLabel: {
+            Text("Speed")
+        } maximumValueLabel: {
+            Text("Quality")
+        }.help(Text("Number of diffusion steps to perform"))
+    }
+    
+    var guidanceSlider: some View {
+        Slider(value: $prompt.guidance, in: 0...20) {
+        } minimumValueLabel: {
+            Text("Creative")
+        } maximumValueLabel: {
+            Text("Predictable")
+        }.help(Text("Guidance factor; set to zero for random output"))
+    }
+}
+
+struct PromptInputView: View {
+    @Binding var text: String
+    @Binding var count: Int
+    var onSubmit: () -> Void
+    
+    private let submitButtonSize: CGFloat = 32
+    private let inputPadding: CGFloat = 4
+    
+    var body: some View {
+        
+        let rect = RoundedRectangle(cornerRadius: submitButtonSize / 2, style: .circular)
+        let stroke = rect.strokeBorder(.tertiary)
+        HStack {
+            TextField(
+                "Prompt",
+                text: $text,
+                axis: .vertical
+            )
+            .onSubmit(onSubmit)
+            .textFieldStyle(.plain)
+            .navigationTitle("Prompt")
+            .fixedSize(horizontal: false, vertical: true)
+            
+            accessory.frame(alignment: .bottomTrailing)
+        }.padding(EdgeInsets(top: inputPadding, leading: submitButtonSize / 3, bottom: inputPadding, trailing: 2))
+        .overlay(stroke)
+        
+    }
+    
+    var accessory: some View {
+        HStack(spacing: 3) {
+            Picker("Batch size", selection: $count) {
+                Text("1").tag(1)
+                Text("4").tag(4)
+                Text("9").tag(9)
+            }.fixedSize().labelsHidden()
+            
+            Button(action: onSubmit) {
+                Image(systemName: "brain.head.profile")
+            }
+            .padding(2)
+            .buttonStyle(.plain)
+            .background(.blue, in: Circle())
+        }.padding(.trailing, 2)
+    }
+    
 }
 
 struct PromptView_Previews: PreviewProvider {
@@ -281,6 +324,11 @@ struct PromptView_Previews: PreviewProvider {
     
     static var previews: some View {
         PromptView(prompt: $prompt, images: .constant([:]), document: $doc).padding()
+        
+        PromptInputView(text: .constant("Flamingos wearing plate armor"), count: .constant(4), onSubmit: {}).previewDisplayName("Input")
+        
+        PromptInputView(text: .constant("Flamingos wearing plate armor, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls, dancing with owls!"), count: .constant(4), onSubmit: {}).previewDisplayName("Long input")
+
         
     }
 }

@@ -13,23 +13,18 @@ extension CGImage {
     }
 }
 
-struct CGImageGridView: View {
-    var images: [CGImage?]
-    
-    var nsImages: [NSImage?] {
-        return images.map {
-            guard let image = $0 else { return nil }
-            return image.asNSImage()
-        }
-    }
+struct NSImageGridView: View {
+    var images: [NSImage?]
     
     var body: some View {
-        NSImageGridView(images: nsImages)
+        CustomNSImageGridView(images: images, emptySpace: Spacer(), missingImage: MissingImagePlaceholder())
     }
 }
 
-struct NSImageGridView: View {
+struct CustomNSImageGridView<Empty: View, Missing: View>: View {
     var images: [NSImage?]
+    var emptySpace: Empty
+    var missingImage: Missing
     
     var perRow: Int {
         return Int(round(Double(images.count).squareRoot()))
@@ -43,34 +38,71 @@ struct NSImageGridView: View {
                     ForEach(0..<perRow, id: \.self) { col in
                         let index = row * perRow + col
                         if index > images.count - 1 {
-                            Spacer()
+                            emptySpace
+                        } else if images[index] == nil {
+                            missingImage
                         } else {
-                            MaybeImage(image: images[index])
+                            let image = images[index]!
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .onDrag {
+                                    let provider = NSItemProvider()
+                                    provider.register(image)
+                                    return provider
+                                }
                         }
                     }
                 }
             }
-        }.aspectRatio(1, contentMode: .fit)
+        }
     }
 }
 
-struct MaybeImage: View {
-    var image: NSImage?
+struct ImagePlaceholderView<Content: View>: View {
+    var placeholder: Image
+    var content: Content
     
     var body: some View {
-        if image == nil {
+        HStack {
+            Spacer()
             VStack {
                 Spacer()
-                Image(systemName: "hand.raised.fill").resizable().aspectRatio(contentMode: .fit)
+                placeholder
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: .resultIconSize)
+                content
                 Spacer()
-                Text("Unsafe")
-                Spacer()
-            }.foregroundColor(.yellow).background(.quaternary)
-        } else {
-            // TODO: click to view?
-            Image(nsImage: image!)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-        }
+            }
+            Spacer()
+        }.foregroundColor(.secondary).background(.quaternary)
+    }
+}
+
+struct MissingImagePlaceholder: View {
+    var body: some View {
+        ImagePlaceholderView(
+            placeholder: Image(systemName: "questionmark.square.fill"),
+            content: Text("Missing Image")
+        ).help("Missing image may have been unsafe")
+    }
+}
+
+struct ErrorImagePlaceholder: View {
+    var body: some View {
+        ImagePlaceholderView(
+            placeholder: Image(systemName: "xmark.square.fill"),
+            content: EmptyView()
+        )
+    }
+}
+
+
+struct ImageGridView_Previews: PreviewProvider {
+    static var previews: some View {
+        NSImageGridView(images: [nil, nil, nil]).previewDisplayName("3")
+        
+        MissingImagePlaceholder().previewDisplayName("1")
     }
 }

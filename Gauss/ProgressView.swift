@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import StableDiffusion
 
 extension Image {
     func square(_ size: CGFloat = 256) -> some View {
@@ -28,116 +29,89 @@ struct ImageMessageView<Title: View, Content: View>: View {
     var content: Content
     
     var body: some View {
-        VStack {
+        HStack {
             Spacer()
-            self.label
-            Spacer()
-            self.content
-            Spacer()
-        }
-        .frame(width: 512, height: 512)
-        .cornerRadius(3)
-    }
-}
-
-struct PendingImageView: View {
-    var body: some View {
-        ImageMessageView(
-            label: Text("Waiting to generate"),
-            content: ProgressView()
-                .frame(width: 256, height: 256)
-        ).foregroundColor(.secondary)
-    }
-}
-
-struct ImageError: View {
-    var message: String
-    
-    var body: some View {
-        ImageMessageView(
-            label: Text("Error: \(message)"),
-            content: Image(systemName: "exclamationmark.square.fill").square()
-        ).foregroundColor(.red)
-            .border(.red)
-    }
-}
-
-struct FirstCGImageView: View {
-    var images: [CGImage?]
-    
-    var body: some View {
-        if images.isEmpty {
-            ImageError(message: "No images produced")
-        } else {
-            CGImageView(cgimage: images[0])
-        }
-    }
-}
-
-struct MissingImage: View {
-    var body: some View {
-        ImageMessageView(
-            label: Text("No image data"),
-            content: Image(systemName: "questionmark.square.dashed").square()
-        ).foregroundColor(.yellow)
-            .border(.yellow)
-    }
-}
-
-struct CGImageView: View {
-    var cgimage: CGImage?
-    
-    var body: some View {
-        if cgimage != nil {
-            let nsImage = NSImage(
-                cgImage: cgimage!,
-                size: NSSize(width: 512, height: 512)
-            )
-            
-            Image(nsImage: nsImage)
-                .square(512)
-                .onDrag {
-                    let provider = NSItemProvider()
-                    provider.register(nsImage)
-                    return provider
+            VStack {
+                Spacer()
+                Group {
+                    self.label
+                    self.content
                 }
-        } else {
-            MissingImage()
+                    .padding()
+                    .background(.thinMaterial, in: GaussStyle.rectSmall)
+                Spacer()
+            }
+            Spacer()
         }
-        
     }
 }
 
 struct GaussProgressView: View {
     @ObservedObject var job: GenerateImageJob
     
+    var nilArray: [NSImage?] {
+        return (0..<job.count).map { _ in nil }
+    }
+    
     var body: some View {
         switch (job.state) {
         case .finished(let images):
-            FirstCGImageView(images: images)
+            NSImageGridView(
+                images: images.map { $0?.asNSImage() }
+            )
         case .pending:
             ZStack {
-                PendingImageView()
-                Button("Cancel") {
-                    job.cancel()
-                }
+                CustomNSImageGridView(
+                    images: nilArray,
+                    emptySpace: Spacer(),
+                    missingImage: Rectangle().fill(.quaternary)
+                )
+                
+                ImageMessageView(
+                    label: ProgressView() {
+                        VStack {
+                            Text("Waiting for other jobs")
+                            Button("Cancel") {
+                                job.cancel()
+                            }
+                        }
+                    }, content: EmptyView()
+                )
             }
 
         case .progress(let images, let progress):
             ZStack {
-                CGImageGridView(images: images)
-                VStack {
-                    Text("\(progress.step) / \(progress.stepCount)")
-                    Button("Cancel") {
-                        job.cancel()
-                    }
-                }
-                .padding()
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                let progressOverlay = ProgressDetailOverlay(step: progress.step, stepCount: progress.stepCount, cancel: job.cancel)
+                NSImageGridView(
+                    images: images.map { $0?.asNSImage() }
+                ).overlay(progressOverlay, alignment: .bottom)
             }
         case .error(let error):
-            ImageError(message: error.localizedDescription)
+            ZStack {
+                CustomNSImageGridView(images: nilArray, emptySpace: Spacer(), missingImage: ErrorImagePlaceholder())
+                
+                ImageMessageView(label: Text(error.localizedDescription).foregroundColor(.red), content: EmptyView())
+            }
         }
+    }
+}
+
+struct ProgressDetailOverlay: View {
+    var step: Int
+    var stepCount: Int
+    var cancel: () -> Void
+    
+    var body: some View {
+        VStack {
+            ProgressView(
+                value: Double(step),
+                total: Double(stepCount)
+            )
+            
+            Button(action: cancel) {
+                Text("Cancel")
+            }
+        }.padding().background(.thinMaterial)
     }
 }
 
@@ -146,17 +120,17 @@ struct ProgressView_Previews: PreviewProvider {
         let job = GenerateImageJob(GaussPrompt(), count: 1, {_,_ in })
         
         Group {
-            CGImageView(cgimage: nil)
-                .previewDisplayName("Missing image")
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, {_,_ in }))
+                .previewDisplayName("Count: 1")
             
-            FirstCGImageView(images: [])
-                .previewDisplayName("Empty image array")
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, {_,_ in }))
+                .previewDisplayName("Count: 3")
             
-            ImageError(message: "Unknown error occured")
-                .previewDisplayName("Error")
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, {_,_ in }))
+                .previewDisplayName("Count: 4")
             
-            GaussProgressView(job: job)
-                .previewDisplayName("Pending job")
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, {_,_ in }))
+                .previewDisplayName("Count: 9")
             
         }
     }

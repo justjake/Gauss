@@ -12,7 +12,7 @@ import CoreML
 
 enum GenerateImageState {
     case pending
-    case progress(images: [CGImage], info: StableDiffusionPipeline.Progress)
+    case progress(images: [CGImage?], info: StableDiffusionPipeline.Progress)
     case finished([CGImage?])
     case error(Error)
 }
@@ -192,9 +192,8 @@ class GaussKernel : ObservableObject {
                 
                 let progress = $0
                 print("Step \(progress.step) / \(progress.stepCount), avg \(sampleTimer.mean) variance \(sampleTimer.variance)")
-                let images = progress.currentImages.compactMap { return $0 }
                 DispatchQueue.main.async {
-                    job.state = .progress(images: images, info: progress)
+                    job.state = .progress(images: progress.currentImages, info: progress)
                 }
                 
                 if progress.stepCount != progress.step {

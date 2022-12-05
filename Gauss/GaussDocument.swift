@@ -68,6 +68,17 @@ struct GaussPrompt: Identifiable, Codable, Sendable {
     
     var width = 512
     var height = 512
+    
+    func clone() -> Self {
+        var copy = self
+        let defaults = Self()
+        copy.id = defaults.id
+        copy.createdAt = defaults.createdAt
+        copy.results = defaults.results
+        copy.favorite = defaults.favorite
+        copy.hidden = defaults.hidden
+        return copy
+    }
 }
 
 extension GaussPrompt: Transferable {
@@ -82,15 +93,21 @@ extension GaussPrompt: Transferable {
     }
 }
 
+struct GaussImageRef: Identifiable, Codable {
+    var id = UUID()
+    var createdAt = Date.now
+    var unsafe: Bool = false
+        
+    var title: String? = nil
+    var favorite = false
+    var hidden = false
+}
+
 struct GaussResult: Identifiable, Codable {
     var id = UUID()
     var createdAt = Date.now
     var promptId: UUID
-    var imageIds: [UUID]
-    
-    var title: String? = nil
-    var favorite = false
-    var hidden = false
+    var images: [GaussImageRef]
 }
 
 struct GaussPersistedData: Codable {
@@ -105,7 +122,41 @@ extension NSImage {
     }
 }
 
+extension NSImage: Transferable  {
+    static public var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) {
+            return $0.toPngData()
+        }
+    }
+}
+
 typealias GaussImages = [String : NSImage]
+
+extension GaussImages {
+    func getImage(ref: GaussImageRef) -> NSImage? {
+        return self[ref.id.uuidString]
+    }
+    
+    mutating func addImage(ref: GaussImageRef, _ image: NSImage) {
+        self[ref.id.uuidString] = image
+    }
+    
+    mutating func removePrompt(_ prompt: GaussPrompt) {
+        for result in prompt.results {
+            removeResult(result)
+        }
+    }
+    
+    mutating func removeResult(_ result: GaussResult) {
+        for image in result.images {
+            removeImage(ref: image)
+        }
+    }
+    
+    mutating func removeImage(ref: GaussImageRef) {
+        removeValue(forKey: ref.id.uuidString)
+    }
+}
 
 struct GaussDocument: FileDocument, Identifiable {
     static let JSON_DATA_NAME = "data.json"

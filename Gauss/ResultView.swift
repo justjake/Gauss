@@ -7,29 +7,27 @@
 
 import SwiftUI
 
-extension NSImage: Transferable  {
-    static public var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(exportedContentType: .png) {
-            return $0.toPngData()
-        }
-    }
-}
-
 struct ResultView: View {
     @Binding var result: GaussResult
     @Binding var images: GaussImages
     
     
     var body: some View {
-        let nsImages = result.imageIds.map { id in
-            return images[id.uuidString]
+        let nsImages = result.images.map { image in
+            return images.getImage(ref: image)
         }
-        NSImageGridView(images: nsImages)
+        NSImageGridView(
+            images: nsImages
+        )
+            .frame(
+                width: GaussStyle.resultSize,
+                height: GaussStyle.resultSize
+            )
     }
 }
 
 struct ResultView_Previews: PreviewProvider {
-    @State static var result = GaussResult(promptId: UUID(), imageIds: [UUID()])
+    @State static var result = GaussResult(promptId: UUID(), images: [GaussImageRef(), GaussImageRef()])
     
     static var previews: some View {
         ResultView(result: $result, images: .constant([:]))

@@ -23,11 +23,12 @@ struct ContentView: View {
                                     prompt: $prompt,
                                     images: $document.images,
                                     document: $document
-                                ).id(prompt.id).onAppear {
-                                    withAnimation {
-                                        scroller.scrollTo(prompt.id)
-                                    }
-                                }
+                                ).id(prompt.id)
+//                                    .onAppear {
+//                                    withAnimation {
+//                                        scroller.scrollTo(prompt.id)
+//                                    }
+//                                }
                             }
                             .frame(alignment: .top)
                             
