@@ -51,8 +51,6 @@ struct NSImageGridView: View {
                 }
             }
         }.aspectRatio(1, contentMode: .fit)
-            .background(.black)
-            .border(.black, width: 1)
     }
 }
 

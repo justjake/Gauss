@@ -30,6 +30,13 @@ class GenerateImageJob : ObservableObject, Identifiable {
         self.count = count
         self.completionHandler = completionHandler
     }
+    
+    func cancel() {
+        print("Cancel job \(id)")
+        self.cancelled = true
+        self.state = .finished([])
+        completionHandler([], self)
+    }
 }
 
 struct GaussKernelResources {
@@ -151,10 +158,19 @@ class GaussKernel : ObservableObject {
     
     private func performGenerateImageJob(_ job: GenerateImageJob) {
         do {
+            if (job.cancelled) {
+                print("Already cancelled before starting")
+                return
+            }
+            
             print("Fetching pipeline for job \(job.id)")
             let pipeline: StableDiffusionPipeline = try getOrCreatePipeline(job.prompt.model)
             self.pipelines[job.prompt.model] = pipeline
             
+            if (job.cancelled) {
+                print("Canelled after building pipeline")
+                return
+            }
             
             print("Starting pipeline.generateImages")
             let sampleTimer = SampleTimer()
@@ -194,12 +210,14 @@ class GaussKernel : ObservableObject {
             
             DispatchQueue.main.async {
                 job.state = .finished(result)
+                self.jobs.removeValue(forKey: job.id)
                 job.completionHandler(result, job)
             }
         } catch {
             print("job error:", error)
             DispatchQueue.main.async {
                 job.state = .error(error)
+                self.jobs.removeValue(forKey: job.id)
             }
         }
     }

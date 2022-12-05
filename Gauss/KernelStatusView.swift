@@ -19,22 +19,37 @@ struct KernelStatusView: View {
     @EnvironmentObject var kernel: GaussKernel
     
     var body: some View {
-        if !kernel.ready {
-            let rect = RoundedRectangle(cornerRadius: 8, style: .continuous)
-            let stroke = rect
-                .strokeBorder(.separator)
-            let background = rect
-                .fill(.background)
-                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: 4)
-                
-            ProgressView {
-                Text("Loading model")
-            }.padding()
-            .overlay(stroke)
-            .background(background)
+        let text = message()
+        if text != nil {
+            VStack {
+                ProgressView {
+                    Text(text!)
+                }
+                .padding()
+                .frame(width: 100, height: 100)
+
+            }
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .aspectRatio(1, contentMode: .fit)
         }
     }
+    
+    func message() -> String? {
+        if !kernel.ready {
+            return "Loading model"
+        }
+        
+        if kernel.jobs.count > 1 {
+            return "\(kernel.jobs.count) jobs"
+        }
+        
+        if kernel.jobs.count == 1 {
+            return "\(kernel.jobs.count) job"
+        }
 
+        
+        return nil
+    }
 }
 
 struct KernelStatusView_Previews: PreviewProvider {

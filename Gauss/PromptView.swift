@@ -35,7 +35,10 @@ struct PromptView: View {
     
     var body: some View {
         VStack {
-            card
+            HStack {
+                Spacer()
+                card.padding()
+            }
             if hasResults {
                 results
             }
@@ -48,24 +51,26 @@ struct PromptView: View {
             /// Section for editing the prompt
             Group {
                 HStack(spacing: 20) {
-                    promptTextField
+                    promptTextField.disabled(locked)
                     if canDelete {
-                        deleteButton.disabled(false)
+                        deleteButton
                     }
                 }.padding([.horizontal, .top])
                 
-                HStack(spacing: 20) {
-                    stepsSlider
-                    Toggle("Safe", isOn: $prompt.safety)
-                        .toggleStyle(.switch)
-                        .help(Text("If enabled, try to hide images that contain unsafe content. Often removes progress results."))
-                }.padding(.horizontal)
-                
-                HStack(spacing: 20) {
-                    guidanceSlider
-                    modelPicker
-                }.padding(.horizontal)
-            }.disabled(locked)
+                Group {
+                    HStack(spacing: 20) {
+                        stepsSlider
+                        Toggle("Safe", isOn: $prompt.safety)
+                            .toggleStyle(.switch)
+                            .help(Text("If enabled, try to hide images that contain unsafe content. Often removes progress results."))
+                    }.padding(.horizontal)
+                    
+                    HStack(spacing: 20) {
+                        guidanceSlider
+                        modelPicker
+                    }.padding(.horizontal)
+                }.disabled(locked)
+            }
             
             /// Section for generating & reviewing images
             VStack(spacing: 0) {
@@ -170,16 +175,16 @@ struct PromptView: View {
     var results: some View {
         ScrollViewReader { scroller in
             ScrollView(.horizontal) {
-                LazyHStack {
+                LazyHStack(spacing: 1) {
                     ForEach($prompt.results) { $result in
                         ResultView(result: $result, images: $images).onAppear {
-                            scroller.scrollTo(result.id)
+//                            scroller.scrollTo(result.id)
                         }.id(result.id)
                     }
                     
                     ForEach($jobs) { $job in
                         GaussProgressView(job: job).onAppear {
-                            scroller.scrollTo(job.id)
+//                            scroller.scrollTo(job.id)
                         }.id(job.id)
                     }
                 }
@@ -209,14 +214,17 @@ struct PromptView: View {
     }
     
     func generateImage(_ count: Int) {
+        let willBecomeLocked = !locked
         let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { results, job in
-            withAnimation(.default) {
-                saveResults(results)
-                jobs.removeAll(where: { $0 === job })
-            }
+            saveResults(results)
+            jobs.removeAll(where: { $0.id == job.id })
+            kernel.jobs.removeValue(forKey: job.id)
         }
         withAnimation(.default) {
             jobs.append(job)
+            if willBecomeLocked {
+                copyPrompt()
+            }
         }
     }
     
@@ -251,16 +259,15 @@ struct PromptView: View {
     }
     
     func delete() {
-        withAnimation(.default) {
-            document.prompts.removeAll(where: { $0.id == prompt.id })
-            for result in prompt.results {
-                for imageId in result.imageIds {
-                    document.images.removeValue(forKey: imageId.uuidString)
-                }
-            }
-            
-            if (document.prompts.isEmpty) {
-                document.prompts.append(GaussPrompt())
+        if (document.prompts.count == 1) {
+            document.prompts.append(GaussPrompt())
+        }
+        
+        let ownPrompt = self.prompt
+        document.prompts.removeAll(where: { $0.id == ownPrompt.id })
+        for result in ownPrompt.results {
+            for imageId in result.imageIds {
+                document.images.removeValue(forKey: imageId.uuidString)
             }
         }
     }

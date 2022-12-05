@@ -119,18 +119,21 @@ struct GaussProgressView: View {
             ZStack {
                 PendingImageView()
                 Button("Cancel") {
-                    job.cancelled = true
+                    job.cancel()
                 }
             }
+
         case .progress(let images, let progress):
             ZStack {
                 CGImageGridView(images: images)
                 VStack {
                     Text("\(progress.step) / \(progress.stepCount)")
                     Button("Cancel") {
-                        job.cancelled = true
+                        job.cancel()
                     }
                 }
+                .padding()
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         case .error(let error):
             ImageError(message: error.localizedDescription)
