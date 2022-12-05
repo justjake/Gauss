@@ -12,6 +12,9 @@ struct PromptView: View {
     @Binding var images: GaussImages
     @Binding var document: GaussDocument
     var selected: Bool = false
+    var canGenerate: Bool = true
+    var canDelete: Bool = true
+    var canDuplicate: Bool = true
     @State private var jobs: [GenerateImageJob] = []
     @EnvironmentObject private var kernel: GaussKernel
     @FocusState private var focused
@@ -43,74 +46,57 @@ struct PromptView: View {
         VStack {
             /// Section for editing the prompt
             Group {
-                TextField(
-                    "Prompt",
-                    text: $prompt.text,
-                    axis: .vertical
-                )
-                .onSubmit {
-                    generateImage()
-                }
-                .focused($focused)
-                .task {
-                    if shouldFocusOnReveal {
-                        self.focused = true
+                HStack(spacing: 20) {
+                    promptTextField
+                    if canDelete {
+                        deleteButton.disabled(false)
                     }
-                }
-                .textFieldStyle(.plain)
-                .font(Font.headline)
-                .navigationTitle("Prompt")
-                .padding([.horizontal, .top])
+                }.padding([.horizontal, .top])
                 
                 HStack(spacing: 20) {
-                    Slider(value: $prompt.steps, in: 1...75, step: 5) {
-                        Text("Steps")
-                    } minimumValueLabel: {
-                        Text("1")
-                    } maximumValueLabel: {
-                        Text("75")
-                    }
-                    
+                    stepsSlider
                     Toggle("Safe", isOn: $prompt.safety)
                         .toggleStyle(.switch)
+                        .help(Text("If enabled, try to hide images that contain unsafe content. Often removes progress results."))
                 }.padding(.horizontal)
                 
+                HStack(spacing: 20) {
+                    guidanceSlider
+                    modelPicker
+                }.padding(.horizontal)
             }.disabled(locked)
             
             /// Section for generating & reviewing images
             VStack(spacing: 0) {
                 Divider()
-//                Rectangle().fill(.separator).frame(height: 1)
                 HStack(spacing: 0) {
-                    (Button {
-                        self.generateImage()
-                    } label: {
-                        BottomBarButtonLabel {
-                            Text("Generate")
-                        }
-                    })
-                    
-                    Divider()
-                    
-                    Button {
-                        self.copyPrompt()
-                    } label: {
-                        BottomBarButtonLabel {
-                            Text("Duplicate")
-                        }
+                    if canGenerate {
+                        (Button {
+                            self.generateImage()
+                        } label: {
+                            BottomBarButtonLabel {
+                                Text("Generate")
+                            }
+                        })
                     }
                     
-                    Divider()
+                    if canGenerate && canDuplicate {
+                        Divider()
+                    }
                     
-                    Button {
-                        self.delete()
-                    } label: {
-                        BottomBarButtonLabel {
-                            Text("Delete").foregroundColor(.red)
+                    if canDuplicate {
+                        Button {
+                            self.copyPrompt()
+                        } label: {
+                            BottomBarButtonLabel {
+                                Text("Duplicate")
+                            }
                         }
                     }
+
+                    
                 }.fixedSize(horizontal: false, vertical: true)
-                .buttonStyle(.borderless)
+                    .buttonStyle(.borderless)
                 Divider().opacity(0)
                 
                 
@@ -119,6 +105,58 @@ struct PromptView: View {
             }
         }
         }.background(background).frame(maxWidth: 600)
+    }
+    
+    var promptTextField: some View {
+        TextField(
+            "Prompt",
+            text: $prompt.text,
+            axis: .vertical
+        )
+        .onSubmit {
+            generateImage()
+        }
+        .focused($focused)
+        .task {
+            if shouldFocusOnReveal {
+                self.focused = true
+            }
+        }
+        .textFieldStyle(.plain)
+        .font(Font.headline)
+        .navigationTitle("Prompt")
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    
+    var stepsSlider: some View {
+        Slider(value: $prompt.steps, in: 1...75, step: 5) {
+        } minimumValueLabel: {
+            Text("Speed")
+        } maximumValueLabel: {
+            Text("Quality")
+        }.help(Text("Number of diffusion steps to perform"))
+    }
+    
+    var guidanceSlider: some View {
+        Slider(value: $prompt.guidance, in: 0...20) {
+        } minimumValueLabel: {
+            Text("Creative")
+        } maximumValueLabel: {
+            Text("Predictable")
+        }.help(Text("Guidance factor; set to zero for random output"))
+    }
+    
+    var modelPicker: some View {
+        Picker("Model", selection: $prompt.model) {
+            Text("SD 2.0").tag(GaussModel.sd2).help(Text("Stable Diffusion 2.0 Base"))
+            Text("SD 1.5").tag(GaussModel.sd1_5).help(Text("Stable Diffusion 1.5"))
+            Text("SD 1.4").tag(GaussModel.sd1_4).help(Text("Stable Diffusion 1.4"))
+            // TODO: support custom models
+        }
+        .fixedSize()
+            .onChange(of: prompt.model) { model in
+                kernel.preloadPipeline(prompt.model)
+            }
     }
     
     var results: some View {
@@ -139,8 +177,8 @@ struct PromptView: View {
         Button {
             self.delete()
         } label: {
-            Image(systemName: "xmark").imageScale(.large)
-        }.padding()
+            Image(systemName: "xmark")
+        }.help(Text("Delete prompt and results"))
             .buttonStyle(.borderless)
             .contentShape(Circle())
     }
@@ -196,6 +234,10 @@ struct PromptView: View {
     func delete() {
         withAnimation(.default) {
             document.prompts.removeAll(where: { $0.id == prompt.id })
+            for result in prompt.results {
+                document.images.removeValue(forKey: result.imageId.uuidString)
+            }
+            
             if (document.prompts.isEmpty) {
                 document.prompts.append(GaussPrompt())
             }

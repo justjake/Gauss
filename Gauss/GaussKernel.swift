@@ -17,8 +17,6 @@ enum GenerateImageState {
     case error(Error)
 }
 
-
-
 class GenerateImageJob : ObservableObject, Identifiable {
     typealias CompletionHandler = ([CGImage?], GenerateImageJob) -> Void
     let id = UUID()
@@ -62,26 +60,31 @@ struct GaussKernelResources {
 
 class GaussKernel : ObservableObject {
     @Published var jobs: [UUID : GenerateImageJob] = [:]
-    @Published var ready = false
+    @Published var loadedModels = Set<GaussModel>()
+    var ready: Bool {
+        return !loadedModels.isEmpty
+    }
     
-    private var pipeline: StableDiffusionPipeline?
     private let queue = DispatchQueue(label: "Diffusion", qos: .userInitiated)
     private let resources = GaussKernelResources()
     private var pipelines: [GaussModel : StableDiffusionPipeline] = [:]
         
-    func preloadPipeline() {
-        if self.pipeline != nil {
+    func preloadPipeline(_ model: GaussModel = GaussModel.Default) {
+        if pipelines[model] != nil {
+            return
+        }
+        
+        if !jobs.isEmpty {
+            print("preloadPipeline: skipping because there are jobs in the queue")
             return
         }
         
         queue.async {
             do {
-                let model = GaussModel.Default
                 let newPipeline = try self.createPipeline(model)
-                self.pipeline = newPipeline
                 self.pipelines[model] = newPipeline
                 DispatchQueue.main.async {
-                    self.ready = true
+                    self.loadedModels.insert(model)
                 }
             } catch {
                 print("Create pipeline error:", error)
@@ -89,8 +92,19 @@ class GaussKernel : ObservableObject {
         }
     }
     
+    private func getOrCreatePipeline(_ model: GaussModel) throws -> StableDiffusionPipeline {
+        if let p = self.pipelines[model] {
+            print("Using pre-existing pipeline for model \(model)")
+            return p
+        } else {
+            let p = try createPipeline(model)
+            pipelines[model] = p
+            return p
+        }
+    }
+    
     private func createPipeline(_ model: GaussModel) throws -> StableDiffusionPipeline  {
-        print("Create new StableDiffusionPipeline")
+        print("Create new StableDiffusionPipeline for model \(model)")
         let timer = SampleTimer()
         timer.start()
         let config = MLModelConfiguration()
@@ -114,7 +128,7 @@ class GaussKernel : ObservableObject {
             configuration: config
         )
         timer.stop()
-        print("Create new StableDiffusionPipeline: done after \(timer.median)s")
+        print("Create new StableDiffusionPipeline for model \(model): done after \(timer.median)s")
         return pipeline
     }
     
@@ -134,21 +148,13 @@ class GaussKernel : ObservableObject {
     
     private func performGenerateImageJob(_ job: GenerateImageJob) {
         do {
-            let pipeline: StableDiffusionPipeline = try {
-                print("Fetching pipeline for job")
-                if let p = self.pipeline {
-                    print("Using pre-existing pipeline")
-                    return p
-                } else {
-                    print("WARNING: Creating new pipeline for model \(job.prompt.model)")
-                    return try createPipeline(job.prompt.model)
-                }
-            }()
+            print("Fetching pipeline for job \(job.id)")
+            let pipeline: StableDiffusionPipeline = try getOrCreatePipeline(job.prompt.model)
             self.pipelines[job.prompt.model] = pipeline
             
-            let sampleTimer = SampleTimer()
             
             print("Starting pipeline.generateImages")
+            let sampleTimer = SampleTimer()
             sampleTimer.start()
             let result = try pipeline.generateImages(
                 prompt: job.prompt.text,
@@ -160,7 +166,8 @@ class GaussKernel : ObservableObject {
                     case .fixed(let value): return value
                     }
                 }(),
-                disableSafety: !job.prompt.safety
+                disableSafety: !job.prompt.safety,
+                guidanceScale: Float(job.prompt.guidance)
             ) {
                 sampleTimer.stop()
                 
