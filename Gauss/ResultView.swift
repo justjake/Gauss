@@ -7,13 +7,40 @@
 
 import SwiftUI
 
+extension NSImage: Transferable  {
+    static public var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) {
+            return $0.toPngData()
+        }
+    }
+}
+
 struct ResultView: View {
     @Binding var result: GaussResult
     @Binding var images: GaussImages
     
+    var image: NSImage? {
+        return images[result.imageId.uuidString]
+    }
+    
     var body: some View {
-        Text("ImageID: \(result.imageId)")
-        Toggle("Favorite", isOn: $result.favorite)
+        VStack {
+            HStack {
+                Text("ImageID: \(result.imageId)")
+                Toggle("Favorite", isOn: $result.favorite)
+
+            }
+            if (image != nil) {
+                Image(nsImage: image!)
+                    .fixedSize()
+                    .onDrag {
+                        let provider = NSItemProvider()
+                        provider.register(image!)
+                        return provider
+                    }
+            }
+        }
+
     }
 }
 

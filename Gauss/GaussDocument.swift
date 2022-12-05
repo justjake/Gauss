@@ -37,6 +37,15 @@ extension GaussPromptId: Transferable {
     }
 }
 
+enum GaussModel: Hashable, Equatable, Codable {
+    case sd2
+    case sd1_4
+    case sd1_5
+    case custom(URL)
+    
+    static var Default: GaussModel = .sd2
+}
+
 
 struct GaussPrompt: Identifiable, Codable, Sendable {
     // App concerns
@@ -49,12 +58,13 @@ struct GaussPrompt: Identifiable, Codable, Sendable {
 
     // ML parameters
     var text = ""
-//    var negativeText = ""
+    var negativeText = ""
     
-//    var guidance = 5.0
+    var guidance = 7.5
     var steps = 10.0
     var seed = GaussSeed.random
-    var safety = true
+    var safety = false
+    var model: GaussModel = GaussModel.Default
     
     var width = 512
     var height = 512
@@ -142,12 +152,13 @@ struct GaussDocument: FileDocument, Identifiable {
         let persisted = GaussPersistedData(id: self.id, prompts: self.prompts)
         let jsonData = try JSONEncoder().encode(persisted)
         let jsonFileWrapper = FileWrapper(regularFileWithContents: jsonData)
-        jsonFileWrapper.filename = GaussDocument.JSON_DATA_NAME
+        jsonFileWrapper.preferredFilename = GaussDocument.JSON_DATA_NAME
         
         let imagesFileWrapper = FileWrapper(directoryWithFileWrappers: [String : FileWrapper]())
+        imagesFileWrapper.preferredFilename = GaussDocument.IMAGE_DIRECTORY_NAME
         for (name, image) in self.images {
             let imageFile = FileWrapper(regularFileWithContents: image.toPngData())
-            imageFile.filename = name
+            imageFile.preferredFilename = name
             imagesFileWrapper.addFileWrapper(imageFile)
         }
         

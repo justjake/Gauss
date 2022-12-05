@@ -96,6 +96,11 @@ struct CGImageView: View {
             
             Image(nsImage: nsImage)
                 .square(512)
+                .onDrag {
+                    let provider = NSItemProvider()
+                    provider.register(nsImage)
+                    return provider
+                }
         } else {
             MissingImage()
         }
@@ -111,11 +116,21 @@ struct GaussProgressView: View {
         case .finished(let images):
             FirstCGImageView(images: images)
         case .pending:
-            PendingImageView()
-        case .progress(let progress):
             ZStack {
-                Text("\(progress.step) / \(progress.stepCount)")
-                FirstCGImageView(images: progress.currentImages)
+                PendingImageView()
+                Button("Cancel") {
+                    job.cancelled = true
+                }
+            }
+        case .progress(let images, let progress):
+            ZStack {
+                FirstCGImageView(images: images)
+                VStack {
+                    Text("\(progress.step) / \(progress.stepCount)")
+                    Button("Cancel") {
+                        job.cancelled = true
+                    }
+                }
             }
         case .error(let error):
             ImageError(message: error.localizedDescription)
