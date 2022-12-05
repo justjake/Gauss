@@ -70,7 +70,7 @@ struct GaussProgressView: View {
                 ImageMessageView(
                     label: ProgressView() {
                         VStack {
-                            Text("Waiting for other jobs")
+                            Text("Waiting for pipeline")
                             Button("Cancel") {
                                 job.cancel()
                             }

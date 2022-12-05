@@ -15,7 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            VStack {
+            VStack(spacing: 0) {
                 ScrollViewReader { scroller in
                     ScrollView {
                         VStack {
@@ -25,11 +25,6 @@ struct ContentView: View {
                                         images: $document.images,
                                         document: $document
                                     ).id(prompt.id)
-    //                                    .onAppear {
-    //                                    withAnimation {
-    //                                        scroller.scrollTo(prompt.id)
-    //                                    }
-    //                                }
                                 }
                                 .frame(alignment: .top)
                                 
@@ -39,16 +34,18 @@ struct ContentView: View {
                                         .padding()
                                         .frame(minWidth: 600, alignment: .trailing)
                                 }
+                            
+                                // Occupy space
+                                PromptComposer(document: $document).disabled(true).opacity(0)
                         }.frame(maxWidth: .infinity)
                     }
                 }
-                
-                Divider()
-                
-                
             }
-
-
+            
+            VStack {
+                Spacer()
+                PromptComposer(document: $document)
+            }
             
             VStack {
                 HStack {

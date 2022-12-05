@@ -31,16 +31,15 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
     }
     
     var body: some View {
-        let _ = print("render grid with \(images.count) images, \(perRow) per row")
         Grid(horizontalSpacing: 1, verticalSpacing: 1) {
             ForEach(0..<perRow, id: \.self) { row in
                 GridRow {
                     ForEach(0..<perRow, id: \.self) { col in
                         let index = row * perRow + col
                         if index > images.count - 1 {
-                            emptySpace
+                            emptySpace.id(index)
                         } else if images[index] == nil {
-                            missingImage
+                            missingImage.id(index)
                         } else {
                             let image = images[index]!
                             Image(nsImage: image)
@@ -50,7 +49,7 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
                                     let provider = NSItemProvider()
                                     provider.register(image)
                                     return provider
-                                }
+                                }.id(index)
                         }
                     }
                 }

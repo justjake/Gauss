@@ -14,11 +14,13 @@ struct PromptView: View {
     var selected: Bool = false
     var canGenerate: Bool = true
     var canDuplicate: Bool = true
-    @State private var batchSize = 1
-    @State private var jobs: [GenerateImageJob] = []
     @State private var count = 1
     @EnvironmentObject private var kernel: GaussKernel
     @FocusState private var focused
+    
+    var jobs: [GenerateImageJob] {
+        kernel.getJobs(for: prompt)
+    }
     
     var locked: Bool {
         return prompt.results.count > 0 || jobs.count > 0
@@ -75,17 +77,21 @@ struct PromptView: View {
                     HStack(spacing: 0) {
                         if canGenerate {
                             BottomBarButtonLabel {
-                                HStack {
-                                    Text("Generate")
-                                    Button("1") {
-                                        generateImage(1)
-                                    }
-                                    Button("4") {
-                                        generateImage(4)
-                                    }
-                                    Button("9") {
-                                        generateImage(9)
-                                    }
+                                HStack(spacing: 12) {
+                                    Label("Generate", systemImage: "brain").padding(.trailing, 6)
+                                    
+                                    Button(action: { generateImage(1) }) {
+                                        Label("1 image", systemImage: "1.square.fill").labelStyle(.iconOnly).imageScale(.large)
+                                    }.help("Generate 1 image with this prompt")
+                                    
+                                    
+                                    Button(action: { generateImage(4) }) {
+                                        Label("4 image", systemImage: "4.square.fill").labelStyle(.iconOnly).imageScale(.large)
+                                    }.help("Generate 4 images with this prompt")
+                                    
+                                    Button(action: { generateImage(9) }) {
+                                        Label("9 images", systemImage: "9.square.fill").labelStyle(.iconOnly).imageScale(.large)
+                                    }.help("Generate 9 images with this prompt")
                                 }
                             }
                         }
@@ -96,10 +102,13 @@ struct PromptView: View {
                         
                         if canDuplicate {
                             Button {
+                                self.remix()
                                 self.insertDuplicateAfterSelf()
                             } label: {
                                 BottomBarButtonLabel {
-                                    Text("Duplicate and edit")
+                                    Label("Remix", systemImage: "shuffle")
+                                        .labelStyle(.titleAndIcon)
+                                        .help("Edit this prompt in the composer")
                                 }
                             }
                         }
@@ -133,7 +142,7 @@ struct PromptView: View {
                             .frame(height: .resultSize)
                     }
                     
-                    ForEach($jobs) { $job in
+                    ForEach(jobs) { job in
                         GaussProgressView(job: job)
                             .id(job.id)
                             .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
@@ -156,19 +165,11 @@ struct PromptView: View {
 
     
     func generateImage(_ count: Int) {
-        let willBecomeLocked = !locked
-        let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { results, job in
+        _ = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { results, job in
             if !job.cancelled {
                 saveResults(results)
             }
-            jobs.removeAll(where: { $0.id == job.id })
             kernel.jobs.removeValue(forKey: job.id)
-        }
-        withAnimation(.default) {
-            jobs.append(job)
-            if willBecomeLocked {
-                insertDuplicateAfterSelf()
-            }
         }
     }
     
@@ -179,6 +180,10 @@ struct PromptView: View {
         withAnimation(.default) {
             self.document.prompts.insert(copy, at: (position ?? 0) + 1)
         }
+    }
+    
+    func remix() {
+        self.document.composer = self.prompt.clone()
     }
     
     func saveResults(_ images: [CGImage?]) {

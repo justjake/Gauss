@@ -12,7 +12,7 @@ import CoreML
 
 enum GenerateImageState {
     case pending
-    case progress(images: [CGImage?], info: StableDiffusionPipeline.Progress)
+    case progress(images: [NSImage?], info: StableDiffusionPipeline.Progress)
     case finished([CGImage?])
     case error(Error)
 }
@@ -77,6 +77,10 @@ class GaussKernel : ObservableObject {
     private let queue = DispatchQueue(label: "Diffusion", qos: .userInitiated)
     private let resources = GaussKernelResources()
     private var pipelines: [GaussModel : StableDiffusionPipeline] = [:]
+    
+    func getJobs(for prompt: GaussPrompt) -> [GenerateImageJob] {
+        return jobs.values.filter { $0.prompt.id == prompt.id }
+    }
         
     func preloadPipeline(_ model: GaussModel = GaussModel.Default) {
         if pipelines[model] != nil {
@@ -193,7 +197,7 @@ class GaussKernel : ObservableObject {
                 let progress = $0
                 print("Step \(progress.step) / \(progress.stepCount), avg \(sampleTimer.mean) variance \(sampleTimer.variance)")
                 DispatchQueue.main.async {
-                    job.state = .progress(images: progress.currentImages, info: progress)
+                    job.state = .progress(images: progress.currentImages.map { $0?.asNSImage() }, info: progress)
                 }
                 
                 if progress.stepCount != progress.step {

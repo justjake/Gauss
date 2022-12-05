@@ -113,6 +113,7 @@ struct GaussResult: Identifiable, Codable {
 struct GaussPersistedData: Codable {
     let id: UUID
     let prompts: [GaussPrompt]
+    let composer: GaussPrompt
 }
 
 extension NSImage {
@@ -164,16 +165,19 @@ struct GaussDocument: FileDocument, Identifiable {
     
     var id: UUID
     var prompts: [GaussPrompt]
+    var composer: GaussPrompt
     var images: [String : NSImage] = [:]
     
     init(
         id: UUID = UUID(),
-        prompts: [GaussPrompt] = [GaussPrompt()],
-        images: [String : NSImage] = [:]
+        prompts: [GaussPrompt] = [],
+        images: [String : NSImage] = [:],
+        composer: GaussPrompt = GaussPrompt()
     ) {
         self.id = id
         self.prompts = prompts
         self.images = images
+        self.composer = composer
     }
 
     static var readableContentTypes: [UTType] { [.gaussNotebook] }
@@ -190,6 +194,7 @@ struct GaussDocument: FileDocument, Identifiable {
         let decoded = try JSONDecoder().decode(GaussPersistedData.self, from: jsonFileData)
         self.id = decoded.id
         self.prompts = decoded.prompts
+        self.composer = decoded.composer
         
         for (name, imageWrapper) in imageFiles {
             if let data = imageWrapper.regularFileContents {
@@ -200,7 +205,7 @@ struct GaussDocument: FileDocument, Identifiable {
     }
     
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let persisted = GaussPersistedData(id: self.id, prompts: self.prompts)
+        let persisted = GaussPersistedData(id: self.id, prompts: self.prompts, composer: self.composer)
         let jsonData = try JSONEncoder().encode(persisted)
         let jsonFileWrapper = FileWrapper(regularFileWithContents: jsonData)
         jsonFileWrapper.preferredFilename = GaussDocument.JSON_DATA_NAME
