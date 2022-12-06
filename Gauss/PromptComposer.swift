@@ -11,31 +11,35 @@ struct PromptComposer: View {
     @Binding var document: GaussDocument
     @State var count = 1
     @EnvironmentObject var kernel: GaussKernel
-    
+    var submitAction: () -> Void
+
     var body: some View {
         VStack {
             PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
             PromptSettingsView(prompt: $document.composer)
         }.padding().background(.regularMaterial)
     }
-    
+
     func onSubmit() {
         let prompt = document.composer.clone()
         document.prompts.append(prompt)
-        _ = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { results, job in
-            if !job.cancelled {
-                saveResults(promptId: prompt.id, images: results)
-            }
-            
-            if case .error = job.state {
-                print("Job ended in error; not removing")
-            } else {
+        submitAction()
+        let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { job in
+            switch job.state {
+            case .finished(let images):
+                saveResults(promptId: prompt.id, images: images)
                 kernel.jobs.removeValue(forKey: job.id)
+            case .cancelled:
+                kernel.jobs.removeValue(forKey: job.id)
+            default:
+                break
             }
         }
+        
+        print("Start job \(job.id) for promtp \(job.prompt.id) <==> \(prompt.id)")
     }
-    
-    func saveResults(promptId: UUID, images: [CGImage?]) {
+
+    func saveResults(promptId: UUID, images: [NSImage?]) {
         guard let promptIndex = document.prompts.firstIndex(where: { $0.id == promptId }) else {
             return
         }
@@ -43,7 +47,7 @@ struct PromptComposer: View {
         var imageRefs: [GaussImageRef] = []
         for image in images {
             var ref = GaussImageRef()
-            guard let nsImage = image?.asNSImage() else {
+            guard let nsImage = image else {
                 ref.unsafe = true
                 imageRefs.append(ref)
                 continue
@@ -66,7 +70,7 @@ struct PromptComposer_Previews: PreviewProvider {
                 text: PromptView_Previews.longPrompt
             )
         )
-        
-        PromptComposer(document: .constant(document))
+
+        PromptComposer(document: .constant(document), submitAction: {})
     }
 }

@@ -37,19 +37,24 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
                     ForEach(0..<perRow, id: \.self) { col in
                         let index = row * perRow + col
                         if index > images.count - 1 {
-                            emptySpace.id(index)
+                            emptySpace
                         } else if images[index] == nil {
-                            missingImage.id(index)
+                            missingImage
                         } else {
                             let image = images[index]!
                             Image(nsImage: image)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .onDrag {
-                                    let provider = NSItemProvider()
+                                    let provider = NSItemProvider(object: image)
                                     provider.register(image)
+//                                    provider.register(image)
+                                    print("Drag started")
+                                    print("Data types:", provider.registeredContentTypes(conformingTo: .data))
+                                    print("Image types:", provider.registeredContentTypes(conformingTo: .image))
+                                    print("URL types:", provider.registeredContentTypes(conformingTo: .url))
                                     return provider
-                                }.id(index)
+                                }
                         }
                     }
                 }

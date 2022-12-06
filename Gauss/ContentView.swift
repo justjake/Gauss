@@ -12,55 +12,49 @@ let SINGLE_SELECTION = true
 struct ContentView: View {
     @Binding var document: GaussDocument
     @State var dragging: GaussPrompt? = nil
+    private let bottomViewId = UUID()
 
     var body: some View {
-        ZStack(alignment: .top) {
-            VStack(spacing: 0) {
-                ScrollViewReader { scroller in
+        ScrollViewReader { proxy in
+            ZStack(alignment: .top) {
+                VStack(spacing: 0) {
                     ScrollView {
                         VStack {
-                                ForEach($document.prompts, editActions: .move) { $prompt in
-                                    PromptView(
-                                        prompt: $prompt,
-                                        images: $document.images,
-                                        document: $document
-                                    ).id(prompt.id)
-                                }
-                                .frame(alignment: .top)
+                            ForEach($document.prompts, editActions: .move) { $prompt in
+                                PromptView(
+                                    prompt: $prompt,
+                                    images: $document.images,
+                                    document: $document
+                                ).id(prompt.id).frame(maxWidth: .infinity, alignment: .trailing).padding()
                                 
-                                HStack {
-                                    Spacer()
-                                    AddPromptButton(document: $document)
-                                        .padding()
-                                        .frame(minWidth: 600, alignment: .trailing)
-                                }
+                                ResultsView(prompt: $prompt, images: $document.images)
+                            }
+                            .frame(alignment: .top)
                             
-                                // Occupy space
-                                PromptComposer(document: $document).disabled(true).opacity(0)
+                            // Occupy space
+                            PromptComposer(document: $document, submitAction: {}).disabled(true).opacity(0).id(bottomViewId)
                         }.frame(maxWidth: .infinity)
                     }
                 }
-            }
             
-            VStack {
-                Spacer()
-                PromptComposer(document: $document)
-            }
+                VStack {
+                    Spacer()
+                    PromptComposer(document: $document, submitAction: { withAnimation { proxy.scrollTo(bottomViewId) } })
+                }
             
-            VStack {
-                HStack {
-                    KernelStatusView().padding()
+                VStack {
+                    HStack {
+                        KernelStatusView().padding()
+                        Spacer()
+                    }
                     Spacer()
                 }
-                Spacer()
-            }
-        }.background(Rectangle().fill(.background))
+            }.background(Rectangle().fill(.background))
+        }
     }
 }
 
-extension DropInfo {
-    
-}
+extension DropInfo {}
 
 struct PromptDropDelegate: DropDelegate {
     var dropTarget: GaussPrompt
@@ -68,7 +62,7 @@ struct PromptDropDelegate: DropDelegate {
     @Binding var document: GaussDocument
         
     func dropEntered(info: DropInfo) {
-        if (!info.hasItemsConforming(to: [.gaussPromptId])) {
+        if !info.hasItemsConforming(to: [.gaussPromptId]) {
             return
         }
         
@@ -82,20 +76,12 @@ struct PromptDropDelegate: DropDelegate {
         
         let from = document.prompts.firstIndex { $0.id == dropTarget.id }
         let to = document.prompts.firstIndex { $0.id == dropTarget.id }
-        
-        
-        
-        
     }
     
     func performDrop(info: DropInfo) -> Bool {
         dragging = nil
         return false
-        
     }
-    
-    
-    
 }
 
 struct ContentView_Previews: PreviewProvider {
@@ -109,6 +95,7 @@ struct ContentView_Previews: PreviewProvider {
 
         return GaussDocument(prompts: [prompt, negativePrompt])
     }
+
     static var selected = Set([document.prompts.first?.id ?? UUID()])
     
     static var previews: some View {

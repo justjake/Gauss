@@ -57,7 +57,7 @@ struct GaussProgressView: View {
         switch (job.state) {
         case .finished(let images):
             NSImageGridView(
-                images: images.map { $0?.asNSImage() }
+                images: images
             )
         case .pending:
             ZStack {
@@ -79,11 +79,13 @@ struct GaussProgressView: View {
                 )
             }
 
+        case .cancelled:
+            CustomNSImageGridView(images: nilArray, emptySpace: Spacer(), missingImage: ErrorImagePlaceholder())
         case .progress(let images, let progress):
             ZStack {
                 let progressOverlay = ProgressDetailOverlay(step: progress.step, stepCount: progress.stepCount, cancel: job.cancel)
                 NSImageGridView(
-                    images: images.map { $0?.asNSImage() }
+                    images: images
                 ).overlay(progressOverlay, alignment: .bottom)
             }
         case .error(let error):
@@ -117,19 +119,17 @@ struct ProgressDetailOverlay: View {
 
 struct ProgressView_Previews: PreviewProvider {
     static var previews: some View {
-        let job = GenerateImageJob(GaussPrompt(), count: 1, {_,_ in })
-        
         Group {
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, {_,_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, {_ in }))
                 .previewDisplayName("Count: 1")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, {_,_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, {_ in }))
                 .previewDisplayName("Count: 3")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, {_,_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, {_ in }))
                 .previewDisplayName("Count: 4")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, {_,_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, {_ in }))
                 .previewDisplayName("Count: 9")
             
         }

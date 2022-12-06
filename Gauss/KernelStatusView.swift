@@ -39,14 +39,15 @@ struct KernelStatusView: View {
             return "Loading model"
         }
         
-        if kernel.jobs.count > 1 {
-            return "\(kernel.jobs.count) jobs"
+        let activeJobs = kernel.activeJobs()
+        
+        if activeJobs.count > 1 {
+            return "\(activeJobs.count) jobs"
         }
         
-        if kernel.jobs.count == 1 {
-            return "\(kernel.jobs.count) job"
+        if activeJobs.count == 1 {
+            return "\(activeJobs.count) job"
         }
-
         
         return nil
     }

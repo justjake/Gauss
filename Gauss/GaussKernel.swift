@@ -13,18 +13,25 @@ import CoreML
 enum GenerateImageState {
     case pending
     case progress(images: [NSImage?], info: StableDiffusionPipeline.Progress)
-    case finished([CGImage?])
+    case finished([NSImage?])
     case error(Error)
+    case cancelled
 }
 
 class GenerateImageJob : ObservableObject, Identifiable {
-    typealias CompletionHandler = ([CGImage?], GenerateImageJob) -> Void
+    typealias CompletionHandler = (GenerateImageJob) -> Void
     let id = UUID()
     let count: Int
     let prompt: GaussPrompt
     let completionHandler: CompletionHandler
-    @Published var cancelled = false
     @Published var state: GenerateImageState = .pending
+    var cancelled: Bool {
+        if case .cancelled = state {
+            return true
+        } else {
+            return false
+        }
+    }
     init(_ prompt: GaussPrompt, count: Int, _ completionHandler: @escaping CompletionHandler) {
         self.prompt = prompt
         self.count = count
@@ -33,9 +40,17 @@ class GenerateImageJob : ObservableObject, Identifiable {
     
     func cancel() {
         print("Cancel job \(id)")
-        self.cancelled = true
-        self.state = .finished([])
-        completionHandler([], self)
+        self.state = .cancelled
+        completionHandler(self)
+    }
+    
+    var isActive: Bool {
+        switch state {
+        case .error, .finished, .cancelled:
+            return false
+        case .pending, .progress:
+            return true
+        }
     }
 }
 
@@ -80,6 +95,10 @@ class GaussKernel : ObservableObject {
     
     func getJobs(for prompt: GaussPrompt) -> [GenerateImageJob] {
         return jobs.values.filter { $0.prompt.id == prompt.id }
+    }
+    
+    func activeJobs() -> [GenerateImageJob] {
+        return jobs.values.filter { $0.isActive }
     }
         
     func preloadPipeline(_ model: GaussModel = GaussModel.Default) {
@@ -212,15 +231,16 @@ class GaussKernel : ObservableObject {
             print("pipeline.generateImages returned \(notNilCount) images and \(nilCount) nils")
             
             DispatchQueue.main.async {
-                job.state = .finished(result)
-                self.jobs.removeValue(forKey: job.id)
-                job.completionHandler(result, job)
+                if !job.cancelled {
+                    job.state = .finished(result.map { $0?.asNSImage() })
+                }
+                job.completionHandler(job)
             }
         } catch {
             print("job error:", error)
             DispatchQueue.main.async {
                 job.state = .error(error)
-                self.jobs.removeValue(forKey: job.id)
+                job.completionHandler(job)
             }
         }
     }

@@ -103,6 +103,24 @@ struct GaussImageRef: Identifiable, Codable {
     var hidden = false
 }
 
+struct TransferableImageRef: Transferable {
+    let ref: GaussImageRef
+    let image: NSImage
+    
+    static public var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) {
+            return $0.image.toPngData()
+        }
+        
+        FileRepresentation(exportedContentType: .png, exporting: { ref in
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(ref.ref.id.uuidString, conformingTo: .png)
+            let fileWrapper = FileWrapper(regularFileWithContents: ref.image.toPngData())
+            try fileWrapper.write(to: url, originalContentsURL: nil)
+            return SentTransferredFile(url, allowAccessingOriginalFile: true)
+        })
+    }
+}
+
 struct GaussResult: Identifiable, Codable {
     var id = UUID()
     var createdAt = Date.now
@@ -125,9 +143,16 @@ extension NSImage {
 
 extension NSImage: Transferable  {
     static public var transferRepresentation: some TransferRepresentation {
-        DataRepresentation(exportedContentType: .png) {
-            return $0.toPngData()
-        }
+        /// Allow dragging NSImage into Finder as a file.
+        ProxyRepresentation<NSImage, URL>(exporting: { image in
+            let nsImage: NSImage = image
+            let name = String(nsImage.hash)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name, conformingTo: .png)
+            let fileWrapper = FileWrapper(regularFileWithContents: nsImage.toPngData())
+            try fileWrapper.write(to: url, originalContentsURL: nil)
+            return url
+        })
+
     }
 }
 
