@@ -1,6 +1,6 @@
 # Gauss
 
-A Stable Diffusion app for macOS built with SwiftUI and Apple's [ml-stable-diffusion](https://github.com/apple/ml-stable-diffusion)CoreML models.
+A Stable Diffusion app for macOS built with SwiftUI and Apple's [ml-stable-diffusion](https://github.com/apple/ml-stable-diffusion) CoreML models.
 
 ![Screenshot](./screenshot.png)
 
