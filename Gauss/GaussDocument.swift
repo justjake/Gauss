@@ -141,16 +141,30 @@ extension NSImage {
     }
 }
 
-extension NSImage: Transferable  {
+extension NSImage: Transferable {
+    private static var urlCahce = [Int : URL]()
+    
+    var maybeTemporaryFileURL: URL? {
+        return try? temporaryFileURL()
+    }
+    
+    func temporaryFileURL() throws -> URL {
+        if let cachedURL = NSImage.urlCahce[self.hash] {
+            return cachedURL
+        }
+        let name = String(self.hash)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name, conformingTo: .png)
+        let fileWrapper = FileWrapper(regularFileWithContents: self.toPngData())
+        try fileWrapper.write(to: url, originalContentsURL: nil)
+        NSImage.urlCahce[self.hash] = url
+        return url
+    }
+    
     static public var transferRepresentation: some TransferRepresentation {
         /// Allow dragging NSImage into Finder as a file.
         ProxyRepresentation<NSImage, URL>(exporting: { image in
             let nsImage: NSImage = image
-            let name = String(nsImage.hash)
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name, conformingTo: .png)
-            let fileWrapper = FileWrapper(regularFileWithContents: nsImage.toPngData())
-            try fileWrapper.write(to: url, originalContentsURL: nil)
-            return url
+            return try nsImage.temporaryFileURL()
         })
 
     }

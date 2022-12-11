@@ -25,6 +25,7 @@
 		C161F217293E07C8007F518C /* StyleHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F216293E07C8007F518C /* StyleHelpers.swift */; };
 		C161F21B293E6394007F518C /* PromptComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F21A293E6394007F518C /* PromptComposer.swift */; };
 		C161F21D293E96A5007F518C /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F21C293E96A5007F518C /* ResultsView.swift */; };
+		C161F21F29404AF8007F518C /* DraggableZoomable.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F21E29404AF8007F518C /* DraggableZoomable.swift */; };
 		C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1825333293BFBFB0038E152 /* StableDiffusion */; };
 		C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1825335293BFE1A0038E152 /* ProgressView.swift */; };
 /* End PBXBuildFile section */
@@ -70,6 +71,7 @@
 		C161F216293E07C8007F518C /* StyleHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleHelpers.swift; sourceTree = "<group>"; };
 		C161F21A293E6394007F518C /* PromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptComposer.swift; sourceTree = "<group>"; };
 		C161F21C293E96A5007F518C /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
+		C161F21E29404AF8007F518C /* DraggableZoomable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraggableZoomable.swift; sourceTree = "<group>"; };
 		C1825331293BFB000038E152 /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "ml-stable-diffusion"; sourceTree = "<group>"; };
 		C1825335293BFE1A0038E152 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -138,6 +140,7 @@
 				C10A4684293B1910005CEE6D /* Preview Content */,
 				C10A46A8293BB0C9005CEE6D /* PromptView.swift */,
 				C161F214293DBFA4007F518C /* ImageGridView.swift */,
+				C161F21E29404AF8007F518C /* DraggableZoomable.swift */,
 				C161F212293C945F007F518C /* AddPromptButton.swift */,
 				C1825335293BFE1A0038E152 /* ProgressView.swift */,
 				C10A46AA293BC512005CEE6D /* ResultView.swift */,
@@ -329,6 +332,7 @@
 				C10A467D293B190F005CEE6D /* GaussDocument.swift in Sources */,
 				C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */,
 				C10A467B293B190F005CEE6D /* GaussApp.swift in Sources */,
+				C161F21F29404AF8007F518C /* DraggableZoomable.swift in Sources */,
 				C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */,
 				C161F213293C945F007F518C /* AddPromptButton.swift in Sources */,
 				C161F21B293E6394007F518C /* PromptComposer.swift in Sources */,
