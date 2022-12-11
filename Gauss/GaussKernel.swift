@@ -55,14 +55,10 @@ class GenerateImageJob : ObservableObject, Identifiable {
 }
 
 struct GaussKernelResources {
-    let sourceCodeRoot = "/Users/jitl/src/gauss/build"
+    let sourceCodeRoot = "/Users/jitl/src/gauss/compiled-models"
     
     var sourceCodeURL: URL {
         URL(filePath: sourceCodeRoot, directoryHint: .isDirectory)
-    }
-    
-    var sd2production: URL {
-        return Bundle.main.url(forResource: "Resources", withExtension: nil)!
     }
     
     func fromSourceCode(modelName: String) -> URL {
@@ -73,12 +69,24 @@ struct GaussKernelResources {
         return fromSourceCode(modelName: "sd2-base")
     }
     
+    var sd2Production: URL {
+        return Bundle.main.url(forResource: "sd2-base", withExtension: nil)!
+    }
+    
     var sd14Sources: URL {
         return fromSourceCode(modelName: "sd1.4")
     }
     
+    var sd14Production: URL {
+        return Bundle.main.url(forResource: "sd1.4", withExtension: nil)!
+    }
+    
     var sd15Sources: URL {
         return fromSourceCode(modelName: "sd1.5")
+    }
+    
+    var sd15Production: URL {
+        return Bundle.main.url(forResource: "sd1.5", withExtension: nil)!
     }
 }
 
@@ -145,11 +153,11 @@ class GaussKernel : ObservableObject {
         let url: URL = {
             switch model {
             case .sd2:
-                return self.resources.sd2Sources
+                return self.resources.sd2Production
             case .sd1_4:
-                return self.resources.sd14Sources
+                return self.resources.sd14Production
             case .sd1_5:
-                return self.resources.sd15Sources
+                return self.resources.sd15Production
             case .custom(let url):
                 return url
             }

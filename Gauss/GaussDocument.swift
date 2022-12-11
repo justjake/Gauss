@@ -265,3 +265,25 @@ struct GaussDocument: FileDocument, Identifiable {
         return outputFileWrapper
     }
 }
+
+enum GaussSelection {
+    case none
+    case jobImage(jobId: UUID, index: Int)
+    case imageRef(GaussImageRef)
+}
+
+class GaussUIState: ObservableObject {
+    @Published var selection: GaussSelection = .none
+    
+    func select(job: GenerateImageJob, index: Int) {
+        selection = .jobImage(jobId: job.id, index: index)
+    }
+    
+    func select(image: GaussImageRef) {
+        selection = .imageRef(image)
+    }
+    
+    func deselect() {
+        selection = .none
+    }
+}

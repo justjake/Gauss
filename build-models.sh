@@ -18,12 +18,7 @@ unset __conda_setup
 set -xeo pipefail
 conda activate coreml_stable_diffusion
 
-DESTINATION="$1"
-
-if [[ -z "$DESTINATION" ]] ; then
-  echo "Usage: build-models ./build"
-  exit 1
-fi
+DESTINATION="compiled-models"
 
 build() {
   local model_version
@@ -37,6 +32,8 @@ build() {
     --bundle-resources-for-swift-cli \
     --chunk-unet \
     -o "../$DESTINATION/$dest"
+  mv "../$DESTINATION/$dest/Unet.mlmodelc" "../$DESTINATION/$dest"
+  mv "../$DESTINATION/$dest/{build,$dest}"
 }
 
 cd ml-stable-diffusion
