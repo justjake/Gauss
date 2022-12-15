@@ -28,8 +28,8 @@ class GenerateImageJob: ObservableTask<
     init(_ prompt: GaussPrompt, count: Int, execute: @escaping Perform) {
         self.prompt = prompt
         self.count = count
-        let noun = count > 1 ? "\(count) images" : "image"
-        super.init("Generate \(noun)", execute)
+        let noun = count > 1 ? "\(count)" : ""
+        super.init("Imagine \(noun)", execute)
     }
 }
 
@@ -138,6 +138,7 @@ class GaussKernel: ObservableObject {
             .ofType(GenerateImageJob.self)
             .values
             .filter { job in job.prompt.id == prompt.id }
+            .sorted(by: { left, right in left.createdAt <= right.createdAt })
     }
     
     private func watchJob<T: ObservableTaskProtocol>(_ job: T) -> T {

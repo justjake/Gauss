@@ -363,6 +363,7 @@ actor Protected<T> {
 
 protocol ObservableTaskProtocol: ObservableObject, Identifiable {
     var id: UUID { get }
+    var createdAt: Date { get }
     var label: String { get }
     @MainActor var anyState: QueueJobState<Any, Any> { get }
     @discardableResult func resume() -> Self
@@ -384,6 +385,7 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
     typealias Perform = (ObservableTask<Success, Progress>) async throws -> Success
 
     let id = UUID()
+    let createdAt = Date.now
     let label: String
     let fn: Perform
     @MainActor @Published var state: QueueJobState<Progress, Success> = .pending
@@ -422,7 +424,11 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
     }
         
     func reportProgress(_ progress: Progress) async {
-        await MainActor.run { self.state = .progress(progress) }
+        await MainActor.run {
+            if self.state.running {
+                self.state = .progress(progress)
+            }
+        }
     }
     
     func waitFor<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
