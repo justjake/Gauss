@@ -23,7 +23,7 @@ extension UTType {
 }
 
 enum GaussSeed: Codable {
-    case random;
+    case random
     case fixed(Int)
 }
 
@@ -37,15 +37,28 @@ extension GaussPromptId: Transferable {
     }
 }
 
-enum GaussModel: Hashable, Equatable, Codable {
+enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvertible {
+    static var Default: GaussModel = .sd1_5
+    static var allCases: [GaussModel] = [
+        .sd2,
+        .sd1_4,
+        .sd1_5,
+    ]
+    
     case sd2
     case sd1_4
     case sd1_5
     case custom(URL)
     
-    static var Default: GaussModel = .sd1_5
+    var description: String {
+        switch self {
+        case .sd1_5: return "Stable Diffusion 1.5"
+        case .sd1_4: return "Stable Diffusion 1.4"
+        case .sd2: return "Stable Diffusion 2.0"
+        case .custom(let url): return "Custom (\(url))"
+        }
+    }
 }
-
 
 struct GaussPrompt: Identifiable, Codable, Sendable {
     // App concerns
@@ -64,7 +77,7 @@ struct GaussPrompt: Identifiable, Codable, Sendable {
     var steps = 10.0
     var seed = GaussSeed.random
     var safety = false
-    var model: GaussModel = GaussModel.Default
+    var model: GaussModel = .Default
     
     var width = 512
     var height = 512
@@ -89,7 +102,7 @@ extension GaussPrompt: Transferable {
     }
     
     var promptId: GaussPromptId {
-        GaussPromptId(ID: id)
+        GaussPromptId(ID: self.id)
     }
 }
 
@@ -107,9 +120,9 @@ struct TransferableImageRef: Transferable {
     let ref: GaussImageRef
     let image: NSImage
     
-    static public var transferRepresentation: some TransferRepresentation {
+    public static var transferRepresentation: some TransferRepresentation {
         DataRepresentation(exportedContentType: .png) {
-            return $0.image.toPngData()
+            $0.image.toPngData()
         }
         
         FileRepresentation(exportedContentType: .png, exporting: { ref in
@@ -142,10 +155,10 @@ extension NSImage {
 }
 
 extension NSImage: Transferable {
-    private static var urlCahce = [Int : URL]()
+    private static var urlCahce = [Int: URL]()
     
     var maybeTemporaryFileURL: URL? {
-        return try? temporaryFileURL()
+        return try? self.temporaryFileURL()
     }
     
     func temporaryFileURL() throws -> URL {
@@ -160,17 +173,16 @@ extension NSImage: Transferable {
         return url
     }
     
-    static public var transferRepresentation: some TransferRepresentation {
+    public static var transferRepresentation: some TransferRepresentation {
         /// Allow dragging NSImage into Finder as a file.
         ProxyRepresentation<NSImage, URL>(exporting: { image in
             let nsImage: NSImage = image
             return try nsImage.temporaryFileURL()
         })
-
     }
 }
 
-typealias GaussImages = [String : NSImage]
+typealias GaussImages = [String: NSImage]
 
 extension GaussImages {
     func getImage(ref: GaussImageRef) -> NSImage? {
@@ -183,13 +195,13 @@ extension GaussImages {
     
     mutating func removePrompt(_ prompt: GaussPrompt) {
         for result in prompt.results {
-            removeResult(result)
+            self.removeResult(result)
         }
     }
     
     mutating func removeResult(_ result: GaussResult) {
         for image in result.images {
-            removeImage(ref: image)
+            self.removeImage(ref: image)
         }
     }
     
@@ -205,12 +217,12 @@ struct GaussDocument: FileDocument, Identifiable {
     var id: UUID
     var prompts: [GaussPrompt]
     var composer: GaussPrompt
-    var images: [String : NSImage] = [:]
+    var images: [String: NSImage] = [:]
     
     init(
         id: UUID = UUID(),
         prompts: [GaussPrompt] = [],
-        images: [String : NSImage] = [:],
+        images: [String: NSImage] = [:],
         composer: GaussPrompt = GaussPrompt()
     ) {
         self.id = id
@@ -249,7 +261,7 @@ struct GaussDocument: FileDocument, Identifiable {
         let jsonFileWrapper = FileWrapper(regularFileWithContents: jsonData)
         jsonFileWrapper.preferredFilename = GaussDocument.JSON_DATA_NAME
         
-        let imagesFileWrapper = FileWrapper(directoryWithFileWrappers: [String : FileWrapper]())
+        let imagesFileWrapper = FileWrapper(directoryWithFileWrappers: [String: FileWrapper]())
         imagesFileWrapper.preferredFilename = GaussDocument.IMAGE_DIRECTORY_NAME
         for (name, image) in self.images {
             let imageFile = FileWrapper(regularFileWithContents: image.toPngData())
@@ -276,14 +288,14 @@ class GaussUIState: ObservableObject {
     @Published var selection: GaussSelection = .none
     
     func select(job: GenerateImageJob, index: Int) {
-        selection = .jobImage(jobId: job.id, index: index)
+        self.selection = .jobImage(jobId: job.id, index: index)
     }
     
     func select(image: GaussImageRef) {
-        selection = .imageRef(image)
+        self.selection = .imageRef(image)
     }
     
     func deselect() {
-        selection = .none
+        self.selection = .none
     }
 }

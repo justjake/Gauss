@@ -16,6 +16,10 @@ struct PromptComposer: View {
     var body: some View {
         VStack {
             PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
+                .task {
+                    let model = document.composer.model
+                    kernel.preloadPipeline(model)
+                }
             PromptSettingsView(prompt: $document.composer)
         }.padding().background(.regularMaterial)
     }

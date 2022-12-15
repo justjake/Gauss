@@ -48,20 +48,24 @@ struct KernelStatusRow<Job: ObservableTaskProtocol>: View {
 
     var body: some View {
         HStack(spacing: 15) {
-            Text(job.label).multilineTextAlignment(.leading)
-            
-            Spacer()
 
             switch job.anyState {
-            case .error(let error):
-                Text(error.localizedDescription).foregroundColor(.red)
+            case .error:
+                EmptyView()
             case .pending:
+                Text(job.label).multilineTextAlignment(.leading)
+                Spacer()
                 ProgressView()
                 cancelButton
             case .running:
+                Text(job.label).multilineTextAlignment(.leading)
+                Spacer()
                 ProgressView()
                 cancelButton
             case .progress(let inner):
+                Text(job.label).multilineTextAlignment(.leading)
+                Spacer()
+
                 if let imageProgress = inner as? ([NSImage?], StableDiffusionPipeline.Progress) {
                     ProgressView(value: Double(imageProgress.1.step), total: Double(imageProgress.1.stepCount))
                 } else {

@@ -99,6 +99,28 @@ extension [any ObservableTaskProtocol] {
     }
 }
 
+actor ModelRepository {
+    private var modelJobs = [GaussModel: LoadModelJob]()
+    
+    public func getLoadModelJob(model: GaussModel, create: () -> LoadModelJob) -> LoadModelJob {
+        if let job = modelJobs[model] {
+            return job
+        }
+        
+        let job = create().onFailure { _ in
+            Task {
+                self.modelJobs.removeValue(forKey: model)
+            }
+        }
+        modelJobs[model] = job
+        return job
+    }
+    
+    public func drop(model: GaussModel) {
+        self.modelJobs.removeValue(forKey: model)
+    }
+}
+
 class GaussKernel: ObservableObject {
     @MainActor @Published var jobs = ObservableTaskDictionary()
     @MainActor @Published var loadedModels = Set<GaussModel>()
@@ -107,7 +129,7 @@ class GaussKernel: ObservableObject {
     }
     
     private let resources = GaussKernelResources()
-    private var pipelines = Protected(value: [GaussModel: StableDiffusionPipeline]())
+    private let pipelines = ModelRepository()
     private var inferenceQueue = AsyncQueue()
     
     @MainActor
@@ -131,46 +153,27 @@ class GaussKernel: ObservableObject {
         
         return job
     }
-    
-    func preloadModelJob(model: GaussModel) -> PreloadModelJob {
-        return watchJob(PreloadModelJob(model) { job in
-            if let p = await self.pipelines.use({ $0[model] }) {
-                return p
-            }
-
-            let loadJob = self.loadModelJob(model).resume()
-            return try await job.waitFor(loadJob)
-        })
-    }
-    
-    func loadModelJob(_ model: GaussModel) -> LoadModelJob {
-        return watchJob(LoadModelJob(model) { _ in
-            let newPipeline = try self.createPipeline(model)
-            await self.pipelines.use {
-                $0[model] = newPipeline
-            }
-            return newPipeline
-        })
+        
+    func loadModelJob(_ model: GaussModel) async -> LoadModelJob {
+         await self.pipelines.getLoadModelJob(model: model) {
+            self.watchJob(LoadModelJob(model) { _ in
+                try self.createPipeline(model)
+            })
+        }
     }
     
     func generateImageJob(
         forPrompt: GaussPrompt,
         count: Int
     ) -> GenerateImageJob {
-        return watchJob(GenerateImageJob(forPrompt, count: count, execute: { job in try await self.performGenerateImageJob(job as! GenerateImageJob)}))
-    }
-            
-    private func getOrCreatePipeline(_ model: GaussModel) async throws -> StableDiffusionPipeline {
-        if let p = await pipelines.use({ $0[model] }) {
-            print("Using pre-existing pipeline for model \(model)")
-            return p
-        } else {
-            let p = try createPipeline(model)
-            await pipelines.use { $0[model] = p }
-            return p
+        let job = GenerateImageJob(forPrompt, count: count, execute: { job in try await self.performGenerateImageJob(job as! GenerateImageJob)}).onFailure { _ in
+            // Model might need to be reloaded to work.
+            Task { await self.pipelines.drop(model: forPrompt.model) }
         }
+
+        return watchJob(job)
     }
-    
+                
     private func createPipeline(_ model: GaussModel) throws -> StableDiffusionPipeline {
         print("Create new StableDiffusionPipeline for model \(model)")
         let timer = SampleTimer()
@@ -200,11 +203,11 @@ class GaussKernel: ObservableObject {
         return pipeline
     }
     
-    @discardableResult
-    func preloadPipeline(_ model: GaussModel = GaussModel.Default) -> PreloadModelJob {
-        let job = preloadModelJob(model: model)
-        Task { await inferenceQueue.enqueue(job) }
-        return job
+    func preloadPipeline(_ model: GaussModel = GaussModel.Default) {
+        Task {
+            let job = await loadModelJob(model)
+            await inferenceQueue.enqueue(job)
+        }
     }
     
     func startGenerateImageJob(
@@ -223,7 +226,8 @@ class GaussKernel: ObservableObject {
         }
             
         print("Fetching pipeline for job \(job.id)")
-        let pipeline: StableDiffusionPipeline = try await job.waitFor(preloadModelJob(model: job.prompt.model).resume())
+        let loadModel = await loadModelJob(job.prompt.model)
+        let pipeline: StableDiffusionPipeline = try await job.waitFor(loadModel.resume())
             
         if Task.isCancelled {
             print("Canelled after building pipeline")

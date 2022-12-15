@@ -12,7 +12,7 @@ struct GaussApp: App {
     private let kernel = GaussKernel()
     
     init() {
-        kernel.preloadPipeline()
+        kernel.preloadPipeline(GaussModel.Default)
     }
     
     var body: some Scene {

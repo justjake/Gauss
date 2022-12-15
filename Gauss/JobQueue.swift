@@ -462,7 +462,6 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
     func onSettled(_ handler: @escaping (Result<Success, Error>) -> Void) -> Self {
         Task {
             let result = await task.result
-            print("onSettled:", id, result)
             await MainActor.run { handler(result) }
         }
         return self
