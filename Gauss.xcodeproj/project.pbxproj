@@ -28,6 +28,7 @@
 		C161F236294682C7007F518C /* sd1.4 in Resources */ = {isa = PBXBuildFile; fileRef = C161F235294682C7007F518C /* sd1.4 */; };
 		C161F23829468301007F518C /* sd1.5 in Resources */ = {isa = PBXBuildFile; fileRef = C161F23729468301007F518C /* sd1.5 */; };
 		C161F23A29468330007F518C /* sd2-base in Resources */ = {isa = PBXBuildFile; fileRef = C161F23929468330007F518C /* sd2-base */; };
+		C161F23C29469628007F518C /* JobQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F23B29469628007F518C /* JobQueue.swift */; };
 		C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1825333293BFBFB0038E152 /* StableDiffusion */; };
 		C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1825335293BFE1A0038E152 /* ProgressView.swift */; };
 /* End PBXBuildFile section */
@@ -73,9 +74,10 @@
 		C161F21A293E6394007F518C /* PromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptComposer.swift; sourceTree = "<group>"; };
 		C161F21C293E96A5007F518C /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
 		C161F21E29404AF8007F518C /* DraggableZoomable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraggableZoomable.swift; sourceTree = "<group>"; };
-		C161F235294682C7007F518C /* sd1.4 */ = {isa = PBXFileReference; lastKnownFileType = file; name = sd1.4; path = "compiled-models/sd1.4/sd1.4"; sourceTree = SOURCE_ROOT; };
-		C161F23729468301007F518C /* sd1.5 */ = {isa = PBXFileReference; lastKnownFileType = file; name = sd1.5; path = "compiled-models/sd1.5/sd1.5"; sourceTree = SOURCE_ROOT; };
+		C161F235294682C7007F518C /* sd1.4 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sd1.4; path = "compiled-models/sd1.4/sd1.4"; sourceTree = SOURCE_ROOT; };
+		C161F23729468301007F518C /* sd1.5 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sd1.5; path = "compiled-models/sd1.5/sd1.5"; sourceTree = SOURCE_ROOT; };
 		C161F23929468330007F518C /* sd2-base */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = "sd2-base"; path = "compiled-models/sd2-base/sd2-base"; sourceTree = SOURCE_ROOT; };
+		C161F23B29469628007F518C /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
 		C1825331293BFB000038E152 /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "ml-stable-diffusion"; sourceTree = "<group>"; };
 		C1825335293BFE1A0038E152 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -137,6 +139,7 @@
 				C10A467A293B190F005CEE6D /* GaussApp.swift */,
 				C10A467C293B190F005CEE6D /* GaussDocument.swift */,
 				C10A46AE293BD460005CEE6D /* GaussKernel.swift */,
+				C161F23B29469628007F518C /* JobQueue.swift */,
 				C10A467E293B190F005CEE6D /* ContentView.swift */,
 				C161F21A293E6394007F518C /* PromptComposer.swift */,
 				C161F210293C31DF007F518C /* KernelStatusView.swift */,
@@ -337,6 +340,7 @@
 				C161F21D293E96A5007F518C /* ResultsView.swift in Sources */,
 				C10A46A9293BB0C9005CEE6D /* PromptView.swift in Sources */,
 				C161F211293C31DF007F518C /* KernelStatusView.swift in Sources */,
+				C161F23C29469628007F518C /* JobQueue.swift in Sources */,
 				C10A467D293B190F005CEE6D /* GaussDocument.swift in Sources */,
 				C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */,
 				C10A467B293B190F005CEE6D /* GaussApp.swift in Sources */,

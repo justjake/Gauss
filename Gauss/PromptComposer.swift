@@ -24,16 +24,8 @@ struct PromptComposer: View {
         let prompt = document.composer.clone()
         document.prompts.append(prompt)
         submitAction()
-        let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { job in
-            switch job.state {
-            case .finished(let images):
-                saveResults(promptId: prompt.id, images: images)
-                kernel.jobs.removeValue(forKey: job.id)
-            case .cancelled:
-                kernel.jobs.removeValue(forKey: job.id)
-            default:
-                break
-            }
+        let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count).onSuccess { images in
+            saveResults(promptId: prompt.id, images: images)
         }
         
         print("Start job \(job.id) for promtp \(job.prompt.id) <==> \(prompt.id)")

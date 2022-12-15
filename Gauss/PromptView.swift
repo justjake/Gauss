@@ -77,15 +77,8 @@ struct PromptView: View {
     }
 
     func generateImage(_ count: Int) {
-        _ = kernel.startGenerateImageJob(forPrompt: prompt, count: count) { job in
-            switch job.state {
-            case .finished(let results):
-                saveResults(results)
-                kernel.jobs.removeValue(forKey: job.id)
-            case .cancelled:
-                kernel.jobs.removeValue(forKey: job.id)
-            default: break
-            }
+        _ = kernel.startGenerateImageJob(forPrompt: prompt, count: count).onSuccess { images in
+                saveResults(images)
         }
     }
     

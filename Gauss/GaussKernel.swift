@@ -5,10 +5,10 @@
 //  Created by Jake Teton-Landis on 12/3/22.
 //
 
-import Foundation
-import SwiftUI
-import StableDiffusion
 import CoreML
+import Foundation
+import StableDiffusion
+import SwiftUI
 
 enum GenerateImageState {
     case pending
@@ -18,39 +18,42 @@ enum GenerateImageState {
     case cancelled
 }
 
-class GenerateImageJob : ObservableObject, Identifiable {
-    typealias CompletionHandler = (GenerateImageJob) -> Void
-    let id = UUID()
+class GenerateImageJob: ObservableTask<
+    [NSImage?],
+    (images: [NSImage?], info: StableDiffusionPipeline.Progress)
+> {
     let count: Int
     let prompt: GaussPrompt
-    let completionHandler: CompletionHandler
-    @Published var state: GenerateImageState = .pending
-    var cancelled: Bool {
-        if case .cancelled = state {
-            return true
-        } else {
-            return false
-        }
-    }
-    init(_ prompt: GaussPrompt, count: Int, _ completionHandler: @escaping CompletionHandler) {
+    
+    init(_ prompt: GaussPrompt, count: Int, execute: @escaping Perform) {
         self.prompt = prompt
         self.count = count
-        self.completionHandler = completionHandler
+        let noun = count > 1 ? "\(count) images" : "image"
+        super.init("Generate \(noun)", execute)
     }
-    
-    func cancel() {
-        print("Cancel job \(id)")
-        self.state = .cancelled
-        completionHandler(self)
+}
+
+class LoadModelJob: ObservableTask<StableDiffusionPipeline, Never> {
+    let model: GaussModel
+    init(_ model: GaussModel, execute: @escaping Perform) {
+        self.model = model
+        super.init("Load \(model)", execute)
     }
-    
-    var isActive: Bool {
-        switch state {
-        case .error, .finished, .cancelled:
-            return false
-        case .pending, .progress:
-            return true
-        }
+}
+
+class DownloadModelJob: ObservableTask<URL, Never> {
+    let model: GaussModel
+    init(_ model: GaussModel, execute: @escaping Perform) {
+        self.model = model
+        super.init("Download \(model)", execute)
+    }
+}
+
+class PreloadModelJob: ObservableTask<StableDiffusionPipeline, Never> {
+    let model: GaussModel
+    init(_ model: GaussModel, execute: @escaping Perform) {
+        self.model = model
+        super.init("Preload \(model)", execute)
     }
 }
 
@@ -90,60 +93,85 @@ struct GaussKernelResources {
     }
 }
 
-class GaussKernel : ObservableObject {
-    @Published var jobs: [UUID : GenerateImageJob] = [:]
-    @Published var loadedModels = Set<GaussModel>()
-    var ready: Bool {
+extension [any ObservableTaskProtocol] {
+    func ofType<T: ObservableTaskProtocol>(_ type: T.Type) -> [T] {
+        self.compactMap { $0 as? T }
+    }
+}
+
+class GaussKernel: ObservableObject {
+    @MainActor @Published var jobs = ObservableTaskDictionary()
+    @MainActor @Published var loadedModels = Set<GaussModel>()
+    @MainActor var ready: Bool {
         return !loadedModels.isEmpty
     }
     
-    private let queue = DispatchQueue(label: "Diffusion", qos: .userInitiated)
     private let resources = GaussKernelResources()
-    private var pipelines: [GaussModel : StableDiffusionPipeline] = [:]
+    private var pipelines = Protected(value: [GaussModel: StableDiffusionPipeline]())
+    private var inferenceQueue = AsyncQueue()
     
+    @MainActor
     func getJobs(for prompt: GaussPrompt) -> [GenerateImageJob] {
-        return jobs.values.filter { $0.prompt.id == prompt.id }
+        return jobs
+            .ofType(GenerateImageJob.self)
+            .values
+            .filter { job in job.prompt.id == prompt.id }
     }
     
-    func activeJobs() -> [GenerateImageJob] {
-        return jobs.values.filter { $0.isActive }
-    }
-        
-    func preloadPipeline(_ model: GaussModel = GaussModel.Default) {
-        if pipelines[model] != nil {
-            return
-        }
-        
-        if !jobs.isEmpty {
-            print("preloadPipeline: skipping because there are jobs in the queue")
-            return
-        }
-        
-        queue.async {
-            do {
-                let newPipeline = try self.createPipeline(model)
-                self.pipelines[model] = newPipeline
-                DispatchQueue.main.async {
-                    self.loadedModels.insert(model)
-                }
-            } catch {
-                print("Create pipeline error:", error)
+    private func watchJob<T: ObservableTaskProtocol>(_ job: T) -> T {
+        Task {
+            await MainActor.run { jobs.insert(job: job) }
+            await job.wait()
+            if case .error = await job.anyState {
+                // pass
+            } else {
+                await MainActor.run { jobs.remove(job: job) }
             }
         }
+        
+        return job
     }
     
-    private func getOrCreatePipeline(_ model: GaussModel) throws -> StableDiffusionPipeline {
-        if let p = self.pipelines[model] {
+    func preloadModelJob(model: GaussModel) -> PreloadModelJob {
+        return watchJob(PreloadModelJob(model) { job in
+            if let p = await self.pipelines.use({ $0[model] }) {
+                return p
+            }
+
+            let loadJob = self.loadModelJob(model).resume()
+            return try await job.waitFor(loadJob)
+        })
+    }
+    
+    func loadModelJob(_ model: GaussModel) -> LoadModelJob {
+        return watchJob(LoadModelJob(model) { _ in
+            let newPipeline = try self.createPipeline(model)
+            await self.pipelines.use {
+                $0[model] = newPipeline
+            }
+            return newPipeline
+        })
+    }
+    
+    func generateImageJob(
+        forPrompt: GaussPrompt,
+        count: Int
+    ) -> GenerateImageJob {
+        return watchJob(GenerateImageJob(forPrompt, count: count, execute: { job in try await self.performGenerateImageJob(job as! GenerateImageJob)}))
+    }
+            
+    private func getOrCreatePipeline(_ model: GaussModel) async throws -> StableDiffusionPipeline {
+        if let p = await pipelines.use({ $0[model] }) {
             print("Using pre-existing pipeline for model \(model)")
             return p
         } else {
             let p = try createPipeline(model)
-            pipelines[model] = p
+            await pipelines.use { $0[model] = p }
             return p
         }
     }
     
-    private func createPipeline(_ model: GaussModel) throws -> StableDiffusionPipeline  {
+    private func createPipeline(_ model: GaussModel) throws -> StableDiffusionPipeline {
         print("Create new StableDiffusionPipeline for model \(model)")
         let timer = SampleTimer()
         timer.start()
@@ -172,84 +200,70 @@ class GaussKernel : ObservableObject {
         return pipeline
     }
     
-    func startGenerateImageJob(
-        forPrompt: GaussPrompt,
-        count: Int,
-        completionHandler: @escaping GenerateImageJob.CompletionHandler
-    ) -> GenerateImageJob  {
-        let job = GenerateImageJob(forPrompt, count: count, completionHandler)
-        self.jobs[job.id] = job
-        print("About to enqueue work")
-        queue.async {
-            self.performGenerateImageJob(job)
-        }
-        print("returned from .generate")
+    @discardableResult
+    func preloadPipeline(_ model: GaussModel = GaussModel.Default) -> PreloadModelJob {
+        let job = preloadModelJob(model: model)
+        Task { await inferenceQueue.enqueue(job) }
         return job
     }
     
-    private func performGenerateImageJob(_ job: GenerateImageJob) {
-        do {
-            if (job.cancelled) {
-                print("Already cancelled before starting")
-                return
-            }
-            
-            print("Fetching pipeline for job \(job.id)")
-            let pipeline: StableDiffusionPipeline = try getOrCreatePipeline(job.prompt.model)
-            self.pipelines[job.prompt.model] = pipeline
-            
-            if (job.cancelled) {
-                print("Canelled after building pipeline")
-                return
-            }
-            
-            print("Starting pipeline.generateImages")
-            let sampleTimer = SampleTimer()
-            sampleTimer.start()
-            let result = try pipeline.generateImages(
-                prompt: job.prompt.text,
-                imageCount: job.count,
-                stepCount: Int(job.prompt.steps),
-                seed: {
-                    switch job.prompt.seed {
-                    case .random: return Int.random(in: 0...Int(UInt32.max))
-                    case .fixed(let value): return value
-                    }
-                }(),
-                disableSafety: !job.prompt.safety,
-                guidanceScale: Float(job.prompt.guidance)
-            ) {
-                sampleTimer.stop()
-                
-                let progress = $0
-                print("Step \(progress.step) / \(progress.stepCount), avg \(sampleTimer.mean) variance \(sampleTimer.variance)")
-                DispatchQueue.main.async {
-                    job.state = .progress(images: progress.currentImages.map { $0?.asNSImage() }, info: progress)
-                }
-                
-                if progress.stepCount != progress.step {
-                    sampleTimer.start()
-                }
-                
-                return !job.cancelled
-            }
-            
-            let nilCount = result.filter { $0 == nil }.count
-            let notNilCount = result.count - nilCount
-            print("pipeline.generateImages returned \(notNilCount) images and \(nilCount) nils")
-            
-            DispatchQueue.main.async {
-                if !job.cancelled {
-                    job.state = .finished(result.map { $0?.asNSImage() })
-                }
-                job.completionHandler(job)
-            }
-        } catch {
-            print("job error:", error)
-            DispatchQueue.main.async {
-                job.state = .error(error)
-                job.completionHandler(job)
-            }
+    func startGenerateImageJob(
+        forPrompt: GaussPrompt,
+        count: Int
+    ) -> GenerateImageJob {
+        let job = generateImageJob(forPrompt: forPrompt, count: count)
+        Task { await inferenceQueue.enqueue(job) }
+        return job
+    }
+    
+    private func performGenerateImageJob(_ job: GenerateImageJob) async throws -> [NSImage?] {
+        if Task.isCancelled {
+            print("Already cancelled before starting")
+            return []
         }
+            
+        print("Fetching pipeline for job \(job.id)")
+        let pipeline: StableDiffusionPipeline = try await job.waitFor(preloadModelJob(model: job.prompt.model).resume())
+            
+        if Task.isCancelled {
+            print("Canelled after building pipeline")
+            return []
+        }
+            
+        print("Starting pipeline.generateImages")
+        let sampleTimer = SampleTimer()
+        sampleTimer.start()
+        let result = try pipeline.generateImages(
+            prompt: job.prompt.text,
+            imageCount: job.count,
+            stepCount: Int(job.prompt.steps),
+            seed: {
+                switch job.prompt.seed {
+                case .random: return Int.random(in: 0 ... Int(UInt32.max))
+                case .fixed(let value): return value
+                }
+            }(),
+            disableSafety: !job.prompt.safety,
+            guidanceScale: Float(job.prompt.guidance)
+        ) {
+            sampleTimer.stop()
+                
+            let progress = $0
+            print("Step \(progress.step) / \(progress.stepCount), avg \(sampleTimer.mean) variance \(sampleTimer.variance)")
+            let currentImages = progress.currentImages.map { $0?.asNSImage() }
+            Task { await job.reportProgress((images: currentImages, info: progress)) }
+                
+            if progress.stepCount != progress.step {
+                sampleTimer.start()
+            }
+                
+            return !Task.isCancelled
+        }
+            
+        let nilCount = result.filter { $0 == nil }.count
+        let notNilCount = result.count - nilCount
+        print("pipeline.generateImages returned \(notNilCount) images and \(nilCount) nils")
+            
+        return result.map { $0?.asNSImage() }
     }
 }

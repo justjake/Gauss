@@ -55,7 +55,7 @@ struct GaussProgressView: View {
     
     var body: some View {
         switch (job.state) {
-        case .finished(let images):
+        case .complete(let images):
             NSImageGridView(
                 images: images
             )
@@ -77,10 +77,17 @@ struct GaussProgressView: View {
                     }, content: EmptyView()
                 )
             }
-
+            
         case .cancelled:
             CustomNSImageGridView(images: nilArray, emptySpace: Spacer(), missingImage: ErrorImagePlaceholder())
-        case .progress(let images, let progress):
+        case .running:
+            ZStack {
+                let progressOverlay = ProgressDetailOverlay(cancel: job.cancel)
+                NSImageGridView(
+                    images: nilArray
+                ).overlay(progressOverlay, alignment: .bottom)
+            }
+        case .progress((let images, let progress)):
             ZStack {
                 let progressOverlay = ProgressDetailOverlay(step: progress.step, stepCount: progress.stepCount, cancel: job.cancel)
                 NSImageGridView(
@@ -98,37 +105,50 @@ struct GaussProgressView: View {
 }
 
 struct ProgressDetailOverlay: View {
-    var step: Int
-    var stepCount: Int
+    var step: Int?
+    var stepCount: Int?
     var cancel: () -> Void
     
     var body: some View {
         VStack {
-            ProgressView(
-                value: Double(step),
-                total: Double(stepCount)
-            )
+            progressView
             
             Button(action: cancel) {
                 Text("Cancel")
             }
         }.padding().background(.thinMaterial)
     }
+    
+    var progressView: some View {
+        let indeterminite = ProgressView().progressViewStyle(.linear)
+        guard let step1 = step else {
+            return indeterminite
+        }
+        
+        guard let stepCount1 = stepCount else {
+            return indeterminite
+        }
+        
+        return ProgressView(
+            value: Double(step1),
+            total: Double(stepCount1)
+        ).progressViewStyle(.linear)
+    }
 }
 
 struct ProgressView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, {_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, execute: {_ in [] }))
                 .previewDisplayName("Count: 1")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, {_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, execute: {_ in [] }))
                 .previewDisplayName("Count: 3")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, {_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, execute: {_ in [] }))
                 .previewDisplayName("Count: 4")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, {_ in }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, execute: {_ in [] }))
                 .previewDisplayName("Count: 9")
             
         }
