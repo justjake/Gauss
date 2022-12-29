@@ -111,6 +111,7 @@ extension ObservableTaskDictionary {
 enum QueueJobError: Error {
     case invalidState(String)
     case dependencyCancelled(String)
+    case noManifest
 }
 
 /// a Task that can be manually fulfilled with a result by external code.
@@ -289,16 +290,18 @@ extension ObservableTask: ObservableTaskProtocol {
 
 /// An ObservableTask is a Task-like abstraction that reports its progress via a published property on the main thread.
 /// ObservableTasks are deferred; they begin executing once `observableTask.resume()` is called.
-class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, Identifiable {
-    typealias Perform = (ObservableTask<Success, Progress>) async throws -> Success
+// TODO: https://developer.apple.com/documentation/foundation/progress#1661050
+class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, ObservableObject, Identifiable, ProgressReporting {
+    typealias Perform = (ObservableTask<Success, OwnProgress>) async throws -> Success
 
     let id = UUID()
     let createdAt = Date.now
     let label: String
     let fn: Perform
-    @MainActor @Published var state: ObservableTaskState<Progress, Success> = .pending
+    @MainActor @Published var state: ObservableTaskState<OwnProgress, Success> = .pending
     @MainActor @Published var waitingFor = ObservableTaskDictionary()
-
+    var progress = Progress()
+    
     init(_ label: String, _ fn: @escaping Perform) {
         self.label = label
         self.fn = fn
@@ -312,7 +315,8 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
 
         do {
             await MainActor.run { self.state = .running }
-            let result = try await self.fn(self)
+            let result = try await self.work()
+            self.progress.completedUnitCount = self.progress.totalUnitCount
             await MainActor.run { self.state = .complete(result) }
             return result
         } catch {
@@ -330,8 +334,12 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
         deferred.resume()
         return self
     }
+    
+    func work() async throws -> Success {
+        return try await fn(self)
+    }
         
-    func reportProgress(_ progress: Progress) async {
+    func reportProgress(_ progress: OwnProgress) async {
         await MainActor.run {
             if self.state.running {
                 self.state = .progress(progress)
@@ -341,12 +349,15 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
     
     func waitFor<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
         await MainActor.run { waitingFor.insert(job: other) }
+        progress.totalUnitCount += 1
+        progress.addChild(other.progress, withPendingUnitCount: 1)
         let result = await other.task.result
         await MainActor.run { waitingFor.remove(job: other) }
         return try result.get()
     }
     
     func cancel(reason: String) {
+        progress.cancel()
         deferred.cancel()
         Task {
             await MainActor.run { self.state = .cancelled(reason: reason) }

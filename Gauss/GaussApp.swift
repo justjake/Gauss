@@ -19,5 +19,9 @@ struct GaussApp: App {
         DocumentGroup(newDocument: GaussDocument()) { file in
             ContentView(document: file.$document).environmentObject(kernel)
         }
+        
+        Settings {
+            AppSettingsView()
+        }
     }
 }

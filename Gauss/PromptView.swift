@@ -128,7 +128,7 @@ struct PromptSettingsView: View {
     
     var modelPicker: some View {
         Picker("Model", selection: $prompt.model) {
-            Text("SD 2.0").tag(GaussModel.sd2).help(Text("Stable Diffusion 2.0 Base"))
+            Text("SD 2.0").tag(GaussModel.sd2_0).help(Text("Stable Diffusion 2.0 Base"))
             Text("SD 1.5").tag(GaussModel.sd1_5).help(Text("Stable Diffusion 1.5"))
             Text("SD 1.4").tag(GaussModel.sd1_4).help(Text("Stable Diffusion 1.4"))
             // TODO: support custom models

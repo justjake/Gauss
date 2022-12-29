@@ -30,6 +30,7 @@ class GenerateImageJob: ObservableTask<
         self.count = count
         let noun = count > 1 ? "\(count)" : ""
         super.init("Imagine \(noun)", execute)
+        self.progress.totalUnitCount = Int64(count)
     }
 }
 
@@ -162,7 +163,7 @@ class GaussKernel: ObservableObject {
         
         let url: URL = {
             switch model {
-            case .sd2:
+            case .sd2_0:
                 return self.resources.sd2Production
             case .sd1_4:
                 return self.resources.sd14Production
@@ -235,6 +236,7 @@ class GaussKernel: ObservableObject {
             let progress = $0
             print("Step \(progress.step) / \(progress.stepCount), avg \(sampleTimer.mean) variance \(sampleTimer.variance)")
             let currentImages = progress.currentImages.map { $0?.asNSImage() }
+            job.progress.completedUnitCount = Int64(progress.step)
             Task { await job.reportProgress((images: currentImages, info: progress)) }
                 
             if progress.stepCount != progress.step {
