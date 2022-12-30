@@ -73,7 +73,7 @@ struct GaussKernelResources {
     }
     
     var sd2Production: URL {
-        return Bundle.main.url(forResource: "sd2-base", withExtension: nil)!
+        return Bundle.main.url(forResource: "sd2", withExtension: nil)!
     }
     
     var sd14Sources: URL {
@@ -117,7 +117,7 @@ actor ModelRepository {
     }
     
     public func drop(model: GaussModel) {
-        self.modelJobs.removeValue(forKey: model)
+        modelJobs.removeValue(forKey: model)
     }
 }
 
