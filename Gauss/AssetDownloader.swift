@@ -116,6 +116,10 @@ protocol BuildRule {
     var inputs: [URL] { get }
 }
 
+protocol CompositeBuildRule: BuildRule {
+    var rules: [BuildRule] { get }
+}
+
 extension URL {
     var mtime: Date? {
         let attributes = try? FileManager.default.attributesOfItem(atPath: absoluteString)
@@ -188,10 +192,15 @@ struct DownloadRule {
     let expectedBytes: Measurement<UnitInformationStorage>
 }
 
+enum DownloadTaskError: Error {
+    case invalidSuccess(String)
+}
+
 // TODO: implement https://developer.apple.com/documentation/foundation/url_loading_system/downloading_files_in_the_background
 class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessionTaskDelegate {
     public let rule: DownloadRule
-    private var continuation: CheckedContinuation<Void, Error>?
+    private var completed = FulfillableTask<Void>()
+    private var downloadTask: URLSessionDownloadTask?
     
     init(_ job: DownloadRule) {
         self.rule = job
@@ -214,14 +223,39 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
         downloadTask.countOfBytesClientExpectsToSend = 200
         downloadTask.countOfBytesClientExpectsToReceive = Int64(rule.expectedBytes.converted(to: .bytes).value)
         downloadTask.delegate = self
-        progress = downloadTask.progress
         return downloadTask
     }
     
+    // Called upon successful completion of the download
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        do {
+            try FileManager.default.moveItem(at: location, to: rule.localURL)
+            completed.fulfill(result: .success(()))
+        } catch {
+            completed.fulfill(result: .failure(error))
+        }
+    }
+
+    // Called when the download fails. We handle the
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let hasError = error {
+            completed.fulfill(result: .failure(hasError))
+        } else {
+            completed.fulfill(result: .failure(DownloadTaskError.invalidSuccess("Should succeed elsewhere")))
+        }
+    }
+    
     override func work() async throws -> URL {
-        let task = createDownloadTask()
-        try await withCheckedContinuation { done in self.continuation = done }
-        task.resume()
+        let downloadTask = createDownloadTask()
+        // TODO: figure out how to shimmy this assignment in case a parent task already observed the old progress instance... does this work?
+        progress = downloadTask.progress
+        downloadTask.resume()
+        _ = try await completed.task.value
+        return rule.localURL
     }
 }
 
@@ -235,12 +269,56 @@ extension DownloadRule: BuildRule {
     }
 }
 
-struct ConcatFilesJob {
+struct ConcatFilesRule {
     let concat: [URL]
     let destination: URL
 }
 
-extension ConcatFilesJob: BuildRule {
+class ConcatFilesTask: ObservableTask<Void, Void> {
+    public let rule: ConcatFilesRule
+    private let bufferSize = 1024 * 1024 * 50
+    
+    init(_ rule: ConcatFilesRule) {
+        self.rule = rule
+        super.init("Assemble \(rule.concat.count) parts") { _ in () }
+    }
+    
+    override func work() async throws {
+        let totalBytes = try rule.concat.map { input in
+            let attributes = try FileManager.default.attributesOfItem(atPath: input.absoluteString)
+            let size = attributes[FileAttributeKey.size] as? NSNumber
+            return size?.intValue ?? 0
+        }.reduce(0) { $0 + $1 }
+        progress.totalUnitCount = Int64(totalBytes)
+        progress.fileTotalCount = rule.concat.count
+        progress.fileOperationKind = .copying
+        progress.fileCompletedCount = 0
+        
+        let output = try FileHandle(forWritingTo: rule.destination)
+
+        for inputURL in rule.concat {
+            let input = try FileHandle(forReadingFrom: inputURL)
+            do {
+                guard let buffer = try input.read(upToCount: bufferSize) else {
+                    break
+                }
+                if buffer.isEmpty {
+                    break
+                }
+                output.write(buffer)
+                progress.completedUnitCount += Int64(buffer.count)
+                // TODO: await Task.yield() sometimes?
+            }
+            input.closeFile()
+            progress.fileCompletedCount = (progress.fileCompletedCount ?? 0) + 1
+            await Task.yield()
+        }
+        
+        output.closeFile()
+    }
+}
+
+extension ConcatFilesRule: BuildRule {
     var outputs: [URL] {
         [destination]
     }
@@ -250,19 +328,19 @@ extension ConcatFilesJob: BuildRule {
     }
 }
 
-struct UnzipFileJob {
+struct UnzipFileRule {
     let zipFile: URL
     let destinationDirectory: URL
 }
 
-extension UnzipFileJob: BuildRule {
+extension UnzipFileRule: BuildRule {
     var inputs: [URL] { [zipFile] }
     var outputs: [URL] { [destinationDirectory] }
 }
 
 let MAX_ZIP_PART_SIZE = Measurement<UnitInformationStorage>.init(value: 2, unit: .gigabytes)
 
-struct DownloadModelJob2 {
+struct DownloadModelRule {
     let model: GaussModel
     let release: GithubRelease
     
@@ -272,16 +350,16 @@ struct DownloadModelJob2 {
         manifesetFileName: $0.element,
         remoteURL: release.baseURL.appendingPathComponent($0.element),
         localURL: ApplicationSupportDir.inst.downloadsURL.appendingPathComponent(release.destinationFileName(sourceFileName: $0.element)),
-        expectedBytes: manifest.uncompressedSize / Double(manifest.zipParts.count)
+        expectedBytes: manifest.uncompressedSize
     ) }}
     
-    var concatJob: ConcatFilesJob { ConcatFilesJob(
+    var concatJob: ConcatFilesRule { ConcatFilesRule(
         concat: downloadJobs.map { $0.localURL },
         destination: ApplicationSupportDir.inst.downloadsURL.appendingPathComponent(release.destinationFileName(sourceFileName: manifest.destinationFile))
     ) }
     
-    var unzipJob: UnzipFileJob {
-        UnzipFileJob(zipFile: concatJob.destination, destinationDirectory: ApplicationSupportDir.inst.modelURL(model))
+    var unzipJob: UnzipFileRule {
+        UnzipFileRule(zipFile: concatJob.destination, destinationDirectory: ApplicationSupportDir.inst.modelURL(model))
     }
     
     func removeIntermediateOutputs() throws {
@@ -291,7 +369,7 @@ struct DownloadModelJob2 {
 }
 
 // TODO:
-extension DownloadModelJob2: BuildRule {
+extension DownloadModelRule: BuildRule {
     var inputs: [URL] {
         downloadJobs.map { $0.remoteURL }
     }
@@ -301,15 +379,15 @@ extension DownloadModelJob2: BuildRule {
     }
 }
 
-struct DownloadAllModelsJob {
+struct DownloadAllModelsRule {
     let release: GithubRelease
-    var jobs: [DownloadModelJob2] {
-        GaussModel.allCases.map { DownloadModelJob2(model: $0, release: release) }
+    var jobs: [DownloadModelRule] {
+        GaussModel.allCases.map { DownloadModelRule(model: $0, release: release) }
     }
 }
 
 // TODO:
-extension DownloadAllModelsJob: BuildRule {
+extension DownloadAllModelsRule: BuildRule {
     var outputs: [URL] {
         jobs.flatMap { $0.outputs }
     }
