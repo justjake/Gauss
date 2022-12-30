@@ -18,6 +18,10 @@
 		C10A46A9293BB0C9005CEE6D /* PromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46A8293BB0C9005CEE6D /* PromptView.swift */; };
 		C10A46AB293BC512005CEE6D /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AA293BC512005CEE6D /* ResultView.swift */; };
 		C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AE293BD460005CEE6D /* GaussKernel.swift */; };
+		C1469899295E60800025DE55 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1469898295E60800025DE55 /* StableDiffusion */; };
+		C146989B295EB57A0025DE55 /* sd1.4 in Resources */ = {isa = PBXBuildFile; fileRef = C146989A295EB57A0025DE55 /* sd1.4 */; };
+		C146989D295EB5A10025DE55 /* sd1.5 in Resources */ = {isa = PBXBuildFile; fileRef = C146989C295EB5A10025DE55 /* sd1.5 */; };
+		C146989F295EB5AA0025DE55 /* sd2 in Resources */ = {isa = PBXBuildFile; fileRef = C146989E295EB5AA0025DE55 /* sd2 */; };
 		C161F211293C31DF007F518C /* KernelStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F210293C31DF007F518C /* KernelStatusView.swift */; };
 		C161F213293C945F007F518C /* AddPromptButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F212293C945F007F518C /* AddPromptButton.swift */; };
 		C161F215293DBFA4007F518C /* ImageGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F214293DBFA4007F518C /* ImageGridView.swift */; };
@@ -25,9 +29,6 @@
 		C161F21B293E6394007F518C /* PromptComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F21A293E6394007F518C /* PromptComposer.swift */; };
 		C161F21D293E96A5007F518C /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F21C293E96A5007F518C /* ResultsView.swift */; };
 		C161F21F29404AF8007F518C /* DraggableZoomable.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F21E29404AF8007F518C /* DraggableZoomable.swift */; };
-		C161F236294682C7007F518C /* sd1.4 in Resources */ = {isa = PBXBuildFile; fileRef = C161F235294682C7007F518C /* sd1.4 */; };
-		C161F23829468301007F518C /* sd1.5 in Resources */ = {isa = PBXBuildFile; fileRef = C161F23729468301007F518C /* sd1.5 */; };
-		C161F23A29468330007F518C /* sd2-base in Resources */ = {isa = PBXBuildFile; fileRef = C161F23929468330007F518C /* sd2-base */; };
 		C161F23C29469628007F518C /* JobQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C161F23B29469628007F518C /* JobQueue.swift */; };
 		C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1825333293BFBFB0038E152 /* StableDiffusion */; };
 		C1825336293BFE1A0038E152 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1825335293BFE1A0038E152 /* ProgressView.swift */; };
@@ -67,6 +68,9 @@
 		C10A46A8293BB0C9005CEE6D /* PromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptView.swift; sourceTree = "<group>"; };
 		C10A46AA293BC512005CEE6D /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultView.swift; sourceTree = "<group>"; };
 		C10A46AE293BD460005CEE6D /* GaussKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussKernel.swift; sourceTree = "<group>"; };
+		C146989A295EB57A0025DE55 /* sd1.4 */ = {isa = PBXFileReference; lastKnownFileType = file; name = sd1.4; path = "compiled-models/sd1.4"; sourceTree = SOURCE_ROOT; };
+		C146989C295EB5A10025DE55 /* sd1.5 */ = {isa = PBXFileReference; lastKnownFileType = file; name = sd1.5; path = "compiled-models/sd1.5"; sourceTree = SOURCE_ROOT; };
+		C146989E295EB5AA0025DE55 /* sd2 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = sd2; path = "compiled-models/sd2"; sourceTree = SOURCE_ROOT; };
 		C161F210293C31DF007F518C /* KernelStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KernelStatusView.swift; sourceTree = "<group>"; };
 		C161F212293C945F007F518C /* AddPromptButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPromptButton.swift; sourceTree = "<group>"; };
 		C161F214293DBFA4007F518C /* ImageGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGridView.swift; sourceTree = "<group>"; };
@@ -74,11 +78,7 @@
 		C161F21A293E6394007F518C /* PromptComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptComposer.swift; sourceTree = "<group>"; };
 		C161F21C293E96A5007F518C /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
 		C161F21E29404AF8007F518C /* DraggableZoomable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraggableZoomable.swift; sourceTree = "<group>"; };
-		C161F235294682C7007F518C /* sd1.4 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sd1.4; path = "compiled-models/sd1.4/sd1.4"; sourceTree = SOURCE_ROOT; };
-		C161F23729468301007F518C /* sd1.5 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sd1.5; path = "compiled-models/sd1.5/sd1.5"; sourceTree = SOURCE_ROOT; };
-		C161F23929468330007F518C /* sd2-base */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = "sd2-base"; path = "compiled-models/sd2-base/sd2-base"; sourceTree = SOURCE_ROOT; };
 		C161F23B29469628007F518C /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
-		C1825331293BFB000038E152 /* ml-stable-diffusion */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = "ml-stable-diffusion"; sourceTree = "<group>"; };
 		C1825335293BFE1A0038E152 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -88,6 +88,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C1825334293BFBFB0038E152 /* StableDiffusion in Frameworks */,
+				C1469899295E60800025DE55 /* StableDiffusion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -111,7 +112,6 @@
 		C10A466E293B190F005CEE6D = {
 			isa = PBXGroup;
 			children = (
-				C1825330293BFB000038E152 /* Packages */,
 				C10A4679293B190F005CEE6D /* Gauss */,
 				C10A468E293B1911005CEE6D /* GaussTests */,
 				C10A4698293B1911005CEE6D /* GaussUITests */,
@@ -133,9 +133,6 @@
 		C10A4679293B190F005CEE6D /* Gauss */ = {
 			isa = PBXGroup;
 			children = (
-				C161F23929468330007F518C /* sd2-base */,
-				C161F23729468301007F518C /* sd1.5 */,
-				C161F235294682C7007F518C /* sd1.4 */,
 				C10A467A293B190F005CEE6D /* GaussApp.swift */,
 				C10A467C293B190F005CEE6D /* GaussDocument.swift */,
 				C10A46AE293BD460005CEE6D /* GaussKernel.swift */,
@@ -155,6 +152,9 @@
 				C10A46AA293BC512005CEE6D /* ResultView.swift */,
 				C161F21C293E96A5007F518C /* ResultsView.swift */,
 				C161F216293E07C8007F518C /* StyleHelpers.swift */,
+				C146989A295EB57A0025DE55 /* sd1.4 */,
+				C146989C295EB5A10025DE55 /* sd1.5 */,
+				C146989E295EB5AA0025DE55 /* sd2 */,
 			);
 			path = Gauss;
 			sourceTree = "<group>";
@@ -184,14 +184,6 @@
 			path = GaussUITests;
 			sourceTree = "<group>";
 		};
-		C1825330293BFB000038E152 /* Packages */ = {
-			isa = PBXGroup;
-			children = (
-				C1825331293BFB000038E152 /* ml-stable-diffusion */,
-			);
-			name = Packages;
-			sourceTree = "<group>";
-		};
 		C1825332293BFBFB0038E152 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -217,6 +209,7 @@
 			name = Gauss;
 			packageProductDependencies = (
 				C1825333293BFBFB0038E152 /* StableDiffusion */,
+				C1469898295E60800025DE55 /* StableDiffusion */,
 			);
 			productName = Gauss;
 			productReference = C10A4677293B190F005CEE6D /* Gauss.app */;
@@ -290,6 +283,9 @@
 				Base,
 			);
 			mainGroup = C10A466E293B190F005CEE6D;
+			packageReferences = (
+				C1469897295E60800025DE55 /* XCRemoteSwiftPackageReference "ml-stable-diffusion" */,
+			);
 			productRefGroup = C10A4678293B190F005CEE6D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -306,11 +302,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C146989D295EB5A10025DE55 /* sd1.5 in Resources */,
+				C146989F295EB5AA0025DE55 /* sd2 in Resources */,
+				C146989B295EB57A0025DE55 /* sd1.4 in Resources */,
 				C10A4686293B1910005CEE6D /* Preview Assets.xcassets in Resources */,
 				C10A4681293B1910005CEE6D /* Assets.xcassets in Resources */,
-				C161F236294682C7007F518C /* sd1.4 in Resources */,
-				C161F23829468301007F518C /* sd1.5 in Resources */,
-				C161F23A29468330007F518C /* sd2-base in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -523,10 +519,10 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportsDocumentBrowser[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UISupportsDocumentBrowser[sdk=iphonesimulator*]" = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = tl.jake.Gauss;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -564,10 +560,10 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportsDocumentBrowser[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UISupportsDocumentBrowser[sdk=iphonesimulator*]" = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = tl.jake.Gauss;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -710,7 +706,23 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		C1469897295E60800025DE55 /* XCRemoteSwiftPackageReference "ml-stable-diffusion" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/ml-stable-diffusion";
+			requirement = {
+				kind = revision;
+				revision = c1fd82a96d64719561cb10c78c3ac4d1bf2859c5;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		C1469898295E60800025DE55 /* StableDiffusion */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C1469897295E60800025DE55 /* XCRemoteSwiftPackageReference "ml-stable-diffusion" */;
+			productName = StableDiffusion;
+		};
 		C1825333293BFBFB0038E152 /* StableDiffusion */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StableDiffusion;

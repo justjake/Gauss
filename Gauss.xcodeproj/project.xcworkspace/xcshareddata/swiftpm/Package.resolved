@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "ml-stable-diffusion",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/ml-stable-diffusion",
+      "state" : {
+        "branch" : "main",
+        "revision" : "c1fd82a96d64719561cb10c78c3ac4d1bf2859c5"
+      }
+    },
+    {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser.git",
