@@ -35,7 +35,19 @@ See [DiffusionBee](https://github.com/divamgupta/diffusionbee-stable-diffusion-u
 
 ### Building from source
 
-1. Clone this repo.
-1. Run `make -j 4`. This will download pre-build models from HuggingFace.
-1. Open the project file (Gauss.xcodeproj) with Xcode.
+1. Clone this repo: `git clone https://github.com/justjake/Gauss`
+1. Inside the repo, run `make`. This will download pre-build models from HuggingFace into `./compiled-models`. You can run `make -j 3` to download the models in parallel if you have a fast connetion. Eg: `cd Gauss && make`
+1. Open the project file (Gauss.xcodeproj) with Xcode: `open Gauss.xcodeproj`
 1. You should be able to build (Cmd-B) and run the project.
+
+### Packing zip files for release
+
+The current plan for releasing Gauss is to pack the models it needs into zips, split the zips into parts no larger than 2gb, and then publish everything via Github release. 2gb is the [file size limit for Github releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#:~:text=Each%20file%20included%20in%20a,a%20release%2C%20nor%20bandwidth%20usage.).
+
+We'll teach Gauss itself how to find, download, and re-assemble the zip files from Github directly.
+
+To create the zip files: `make zips`
+
+### Publishing releases to Github
+
+TODO - figure this out!
