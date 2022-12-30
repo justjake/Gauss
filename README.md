@@ -30,11 +30,12 @@ See [DiffusionBee](https://github.com/divamgupta/diffusionbee-stable-diffusion-u
 - `git-lfs` is used to fetch pre-built models from HuggingFace.
   - If you have `brew`: `brew install git-lfs`, then `git lfs install`.
   - Otherwise, [download the installer here](https://git-lfs.com/), then `git lfs install`.
+- At least 10gb of free disk space.
 - Recommended: [set up Xcode to format code when you save](https://luisramos.dev/xcode-format-and-save).
 
 ### Building from source
 
 1. Clone this repo.
-1. Run `make`. This will download pre-build models from HuggingFace.
-1. Open the project file (Gauss.xcodeproj) with Xcode
+1. Run `make -j 4`. This will download pre-build models from HuggingFace.
+1. Open the project file (Gauss.xcodeproj) with Xcode.
 1. You should be able to build (Cmd-B) and run the project.
