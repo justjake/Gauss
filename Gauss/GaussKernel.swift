@@ -58,34 +58,12 @@ class PreloadModelJob: ObservableTask<StableDiffusionPipeline, Never> {
 }
 
 struct GaussKernelResources {
-    let sourceCodeRoot = "/Users/jitl/src/gauss/compiled-models"
-    
-    var sourceCodeURL: URL {
-        URL(filePath: sourceCodeRoot, directoryHint: .isDirectory)
-    }
-    
-    func fromSourceCode(modelName: String) -> URL {
-        return sourceCodeURL.appending(components: modelName, "Resources")
-    }
-    
-    var sd2Sources: URL {
-        return fromSourceCode(modelName: "sd2-base")
-    }
-    
     var sd2Production: URL {
         return Bundle.main.url(forResource: "sd2", withExtension: nil)!
     }
     
-    var sd14Sources: URL {
-        return fromSourceCode(modelName: "sd1.4")
-    }
-    
     var sd14Production: URL {
         return Bundle.main.url(forResource: "sd1.4", withExtension: nil)!
-    }
-    
-    var sd15Sources: URL {
-        return fromSourceCode(modelName: "sd1.5")
     }
     
     var sd15Production: URL {

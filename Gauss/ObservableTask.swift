@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-enum QueueJobState<P, R> {
+enum ObservableTaskState<P, R> {
     case pending
     case running
     case progress(P)
@@ -16,7 +16,7 @@ enum QueueJobState<P, R> {
     case error(Error)
     case cancelled(reason: String)
     
-    var erased: QueueJobState<Any, Any> {
+    var erased: ObservableTaskState<Any, Any> {
         switch self {
         case .pending: return .pending
         case .running: return .running
@@ -54,7 +54,7 @@ enum QueueJobState<P, R> {
 
 @MainActor
 class ObservableTaskTracker: ObservableObject {
-    @Published var jobs: [UUID: any ObservableTaskProtocol] = [:]
+    @Published var jobs = ObservableTaskDictionary()
         
     func insert(job: any ObservableTaskProtocol) {
         jobs[job.id] = job
@@ -85,7 +85,7 @@ extension ObservableTaskDictionary {
     }
     
     mutating func remove(job: any ObservableTaskProtocol) {
-        self.removeValue(forKey: job.id)
+        removeValue(forKey: job.id)
     }
         
     @MainActor
@@ -104,50 +104,7 @@ extension ObservableTaskDictionary {
     }
 
     func ofType<T: ObservableTaskProtocol>(_ type: T.Type) -> [UUID: T] {
-        self.compactMapValues { v in v as? T }
-    }
-}
-
-class JobQueue: ObservableObject {
-    @Published var jobs: [UUID: any QueueJobProtocol] = [:]
-    let dispatchQueue: DispatchQueue
-    
-    init(label: String) {
-        dispatchQueue = DispatchQueue(label: label, qos: .userInitiated)
-    }
-    
-    func insert(job: any QueueJobProtocol) {
-        job.queue = self
-        jobs[job.id] = job
-    }
-    
-    func remove(job: any QueueJobProtocol) {
-        jobs.removeValue(forKey: job.id)
-        job.queue = nil
-    }
-    
-    func async<P, R>(job: QueueJob<P, R>, completionHandler: @escaping (QueueJob<P, R>) -> Void) {
-        insert(job: job)
-        dispatchQueue.async {
-            job.work { _ in
-                if case .complete = job.state {
-                    self.remove(job: job)
-                }
-                completionHandler(job)
-            }
-        }
-    }
-    
-    var pending: [UUID: any QueueJobProtocol] {
-        self.jobs.filter { _, v in v.pending }
-    }
-    
-    var running: [UUID: any QueueJobProtocol] {
-        self.jobs.filter { _, v in v.running }
-    }
-    
-    var finalized: [UUID: any QueueJobProtocol] {
-        self.jobs.filter { _, v in v.finalized }
+        compactMapValues { v in v as? T }
     }
 }
 
@@ -156,50 +113,7 @@ enum QueueJobError: Error {
     case dependencyCancelled(String)
 }
 
-protocol QueueJobProtocol: Identifiable, ObservableObject {
-    var id: UUID { get }
-    var queue: JobQueue? { get set }
-    var label: String { get }
-    var dependsOn: Set<UUID> { get }
-    var anyState: QueueJobState<Any, Any> {
-        get
-    }
-}
-
-extension QueueJobProtocol {
-    var pending: Bool {
-        return !running && !finalized
-    }
-    
-    var running: Bool {
-        switch anyState {
-        case .progress: return true
-        case .running: return true
-        default: return false
-        }
-    }
-    
-    var finalized: Bool {
-        switch anyState {
-        case .cancelled: fallthrough
-        case .error: fallthrough
-        case .complete: return true
-        case .pending: return false
-        case .running: return false
-        case .progress: return false
-        }
-    }
-    
-    var cancelled: Bool {
-        switch anyState {
-        case .cancelled: return true
-        default: return false
-        }
-    }
-}
-
-var tokens = [UUID: CheckedContinuation<Never, Never>]()
-
+/// a Task that can be manually fulfilled with a result by external code.
 class FulfillableTask<Success: Sendable> {
     typealias Failure = any Error
     typealias Continuation = CheckedContinuation<Result<Success, Failure>, Never>
@@ -264,22 +178,24 @@ protocol Waitable {
 
 extension Task: Waitable {
     func wait() async {
-        _ = await self.result
+        _ = await result
     }
 }
 
 extension DeferredTask: Waitable {
     func wait() async {
-        await self.task.wait()
+        await task.wait()
     }
 }
 
 extension FulfillableTask: Waitable {
     func wait() async {
-        await self.task.wait()
+        await task.wait()
     }
 }
 
+/// An async Task that only starts to execute once `resume` is called.
+/// Callers may wait for the task indefinitely via `deferred.task.value`.
 struct DeferredTask<Success: Sendable> {
     public let operation: () async throws -> Success
     
@@ -320,6 +236,8 @@ struct DeferredTask<Success: Sendable> {
     }
 }
 
+/// Ensure that only a single enqueued task is running at a time.
+/// The intention is to mimic the semantics of DispatchQueue with Swift Concurrency.
 actor AsyncQueue {
     var queue = [any ObservableTaskProtocol]()
     var current: (any ObservableTaskProtocol)?
@@ -349,30 +267,18 @@ actor AsyncQueue {
     }
 }
 
-actor Protected<T> {
-    var value: T
-    
-    init(value: T) {
-        self.value = value
-    }
-    
-    func use<R: Sendable>(_ fn: () async throws -> R) async rethrows -> R {
-        return try await fn()
-    }
-}
-
 protocol ObservableTaskProtocol: ObservableObject, Identifiable {
     var id: UUID { get }
     var createdAt: Date { get }
     var label: String { get }
-    @MainActor var anyState: QueueJobState<Any, Any> { get }
+    @MainActor var anyState: ObservableTaskState<Any, Any> { get }
     @discardableResult func resume() -> Self
     func wait() async
     func cancel()
 }
 
 extension ObservableTask: ObservableTaskProtocol {
-    @MainActor var anyState: QueueJobState<Any, Any> {
+    @MainActor var anyState: ObservableTaskState<Any, Any> {
         return state.erased
     }
 
@@ -381,6 +287,8 @@ extension ObservableTask: ObservableTaskProtocol {
     }
 }
 
+/// An ObservableTask is a Task-like abstraction that reports its progress via a published property on the main thread.
+/// ObservableTasks are deferred; they begin executing once `observableTask.resume()` is called.
 class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, Identifiable {
     typealias Perform = (ObservableTask<Success, Progress>) async throws -> Success
 
@@ -388,7 +296,7 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
     let createdAt = Date.now
     let label: String
     let fn: Perform
-    @MainActor @Published var state: QueueJobState<Progress, Success> = .pending
+    @MainActor @Published var state: ObservableTaskState<Progress, Success> = .pending
     @MainActor @Published var waitingFor = ObservableTaskDictionary()
 
     init(_ label: String, _ fn: @escaping Perform) {
@@ -446,7 +354,7 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
     }
     
     func cancel() {
-        self.cancel(reason: "Unknown")
+        cancel(reason: "Unknown")
     }
     
     func onSuccess(_ handler: @escaping (Success) -> Void) -> Self {
@@ -473,170 +381,3 @@ class ObservableTask<Success: Sendable, Progress: Sendable>: ObservableObject, I
         return self
     }
 }
-
-// actor AsyncJobQueue {
-//
-//
-//    func execute<P: Sendable, R: Sendable>(job: ObservableTask<R, P>, fn: @escaping (ObservableTask<R, P>) async throws -> R) async {
-//        let task = Task {
-//            let currentState = await job.state
-//            guard case .pending = currentState else {
-//                throw QueueJobError.invalidState("Expected pending job, but was \(currentState)")
-//            }
-//
-//            do {
-//                await MainActor.run { job.state = .running }
-//                let result = try await fn(job)
-//                await MainActor.run { job.state = .complete(result) }
-//                return result
-//            } catch {
-//                await MainActor.run { job.state = .error(error) }
-//                throw error
-//            }
-//        }
-//
-//        await MainActor.run {
-//            job.task = task
-//        }
-//    }
-// }
-
-class QueueJob<P, R>: Identifiable, ObservableObject, QueueJobProtocol {
-    var anyState: QueueJobState<Any, Any> {
-        switch state {
-        case .complete(let result):
-            return .complete(result)
-        case .progress(let progress):
-            return .progress(progress)
-        case .pending: return .pending
-        case .running: return .running
-        case .error(let error): return .error(error)
-        case .cancelled(reason: let reason): return .cancelled(reason: reason)
-        }
-    }
-    
-    typealias Perform = (_ job: QueueJob<P, R>) throws -> R
-    let id = UUID()
-    let label: String
-    var queue: JobQueue?
-    var execute: Perform
-    @Published var state: QueueJobState<P, R>
-    @Published var dependsOn: Set<UUID> = []
-    
-    init(label: String, state: QueueJobState<P, R>, execute: @escaping Perform) {
-        self.label = label
-        self.state = state
-        self.execute = execute
-        Task { print("hi") }
-    }
-    
-    convenience init(_ label: String, _ execute: @escaping Perform) {
-        self.init(label: label, state: .pending, execute: execute)
-    }
-    
-    func runSubtask<P, R>(_ job: QueueJob<P, R>) throws -> R {
-        if job.finalized {
-            return try job.unwrap()
-        }
-        
-        onMainAsync {
-            self.dependsOn.insert(job.id)
-            if let queue = self.queue {
-                queue.insert(job: job)
-            }
-        }
-        
-        job.work { _ in }
-        
-        onMainAsync {
-            self.dependsOn.remove(job.id)
-        }
-        
-        return try job.unwrap()
-    }
-    
-    func reportProgress(_ next: P) {
-        onMainAsync {
-            self.state = .progress(next)
-        }
-    }
-    
-    func cancel(reason: String) {
-        onMainAsync {
-            self.state = .cancelled(reason: reason)
-        }
-    }
-    
-    private func onMainAsync(_ run: @escaping () -> Void) {
-        if Thread.isMainThread {
-            run()
-        } else {
-            DispatchQueue.main.async {
-                run()
-            }
-        }
-    }
-    
-    func unwrap() throws -> R {
-        switch state {
-        case .complete(let result):
-            return result
-        case .cancelled(let reason):
-            throw QueueJobError.dependencyCancelled(reason)
-        case .error(let error): throw error
-        default:
-            throw QueueJobError.invalidState("Job not finalized: \(state)")
-        }
-    }
-    
-    func work(_ completionHandler: @escaping (QueueJob) -> Void) {
-        guard !(running || finalized) else {
-            let currentState = state
-            onMainAsync {
-                self.state = .error(QueueJobError.invalidState("Must be .pending to start, but was: \(currentState)"))
-            }
-            return
-        }
-        
-        onMainAsync {
-            self.state = .running
-        }
-        
-        do {
-            let result = try execute(self)
-            onMainAsync {
-                self.state = .complete(result)
-                completionHandler(self)
-            }
-        } catch {
-            onMainAsync {
-                self.state = .error(error)
-                completionHandler(self)
-            }
-        }
-    }
-}
-
-/*
- 
- func generateImage(params) {
-    var generateJob = Job { job in
-       let pipeline = job.runSubtask(Job("Get pileline") { getPipelineWorker() })
-       let result = pipeline.run(params) { progress in
-         job.reportProgress(progress)
-       }
-       return result
-    }
-    generateJob.completionHandler = generateJob
-    queue.enqueue(generateJob)
-    return generateJob
- }
- 
- func getPipelineWorker() {
-     if let pipeline = storage.get(pipeline) {
-         return pipeline
-     }
-    return actuallyCreatePipeline()
- }
- 
- */
