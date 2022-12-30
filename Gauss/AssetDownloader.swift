@@ -5,14 +5,16 @@
 //  Created by Jake Teton-Landis on 12/15/22.
 //
 
+import AppleArchive
 import Foundation
+import System
 
 /// /ApplicationSupport/ts.jake.Gauss
 ///     /models
 ///         /sd2.0
 ///     /downloads
-///         /sd2.0.zip.01
-///         /sd2.0.zip.02
+///         /sd2.0.aar.01
+///         /sd2.0.aar.02
 ///         /sd2.0.zip
 struct ApplicationSupportDir {
     static let inst = ApplicationSupportDir()
@@ -53,17 +55,22 @@ struct ApplicationSupportDir {
 
 // TODO: sha256, etc
 // https://stackoverflow.com/questions/66143413/sha-256-of-large-file-using-cryptokit
-struct SplitZipFileManifest: Codable {
-    /// eg "sd2.0.zip"
+struct SplitArchiveManifest: Codable {
+    /// eg "sd2.aar"
     let destinationFile: String
-    /// eg ["sd2.0.zip.01", "sd2.0.zip.02"]
-    let zipParts: [String]
+    /// eg ["sd2.0.aar.01", "sd2.0.aar.02"]
+    let archiveParts: [String]
     /// Final size when expanded. Presented as the rough estimate for downloading the zip parts.
     /// Used to decide if we should attempt to download the model or not
     let uncompressedSize: Measurement<UnitInformationStorage>
 }
 
-struct GithubRelease {
+protocol AssetHost {
+    func sourceURL(sourceFileName: String) -> URL
+    func destinationFileName(sourceFileName: String) -> String
+}
+
+struct GithubRelease: AssetHost {
     let owner = "justjake"
     let repo = "Gauss"
     let tag: String
@@ -77,31 +84,48 @@ struct GithubRelease {
     func destinationFileName(sourceFileName: String) -> String {
         "github-\(owner)-\(repo)-\(tag)-\(sourceFileName)"
     }
+    
+    func sourceURL(sourceFileName: String) -> URL {
+        baseURL.appendingPathComponent(sourceFileName)
+    }
 }
 
-func getManifest(for model: GaussModel) -> SplitZipFileManifest? {
+struct TestAssetHost: AssetHost {
+    let baseURL: URL
+    let localPrefix: String
+    
+    func sourceURL(sourceFileName: String) -> URL {
+        baseURL.appendingPathComponent(sourceFileName)
+    }
+    
+    func destinationFileName(sourceFileName: String) -> String {
+        "\(localPrefix)-\(sourceFileName)"
+    }
+}
+
+func getManifest(for model: GaussModel) -> SplitArchiveManifest? {
     switch model {
-    case .sd2_0: return SplitZipFileManifest(
-            destinationFile: "sd2.0.zip",
-            zipParts: [
-                "sd2.0.zip.01",
-                "sd2.0.zip.02"
+    case .sd2_0: return SplitArchiveManifest(
+            destinationFile: "sd2.aar",
+            archiveParts: [
+                "sd2.aar.00",
+                "sd2.aar.01"
             ],
             uncompressedSize: .init(value: 4913736, unit: .bytes)
         )
-    case .sd1_4: return SplitZipFileManifest(
-            destinationFile: "sd1.4.zip",
-            zipParts: [
-                "sd1.4.zip.01",
-                "sd1.4.zip.02"
+    case .sd1_4: return SplitArchiveManifest(
+            destinationFile: "sd1.4.aar",
+            archiveParts: [
+                "sd1.4.aar.00",
+                "sd1.4.aar.01"
             ],
             uncompressedSize: .init(value: 5226992, unit: .bytes)
         )
-    case .sd1_5: return SplitZipFileManifest(
-            destinationFile: "sd1.5",
-            zipParts: [
-                "sd1.5.zip.01",
-                "sd1.5.zip.02"
+    case .sd1_5: return SplitArchiveManifest(
+            destinationFile: "sd1.5.aar",
+            archiveParts: [
+                "sd1.5.aar.00",
+                "sd1.5.aar.01"
             ],
             uncompressedSize: .init(value: 5226992, unit: .bytes)
         )
@@ -192,8 +216,13 @@ struct DownloadRule {
     let expectedBytes: Measurement<UnitInformationStorage>
 }
 
-enum DownloadTaskError: Error {
+enum AssetDownloadError: Error {
     case invalidSuccess(String)
+    case urlNotAFilePath(URL)
+    case cannotOpenArchive(FilePath)
+    case cannotDecompressArchive(FilePath)
+    case cannotDecodeArchive(FilePath)
+    case cannotStartExtraction(archive: FilePath, destination: FilePath)
 }
 
 // TODO: implement https://developer.apple.com/documentation/foundation/url_loading_system/downloading_files_in_the_background
@@ -245,7 +274,7 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
         if let hasError = error {
             completed.fulfill(result: .failure(hasError))
         } else {
-            completed.fulfill(result: .failure(DownloadTaskError.invalidSuccess("Should succeed elsewhere")))
+            completed.fulfill(result: .failure(AssetDownloadError.invalidSuccess("Should succeed elsewhere")))
         }
     }
     
@@ -328,38 +357,120 @@ extension ConcatFilesRule: BuildRule {
     }
 }
 
-struct UnzipFileRule {
-    let zipFile: URL
+struct UnarchiveFilesRule {
+    let archiveFile: URL
     let destinationDirectory: URL
+    // Note: we could add support for archive UTIType or something if we want to support .zip as well
 }
 
-extension UnzipFileRule: BuildRule {
-    var inputs: [URL] { [zipFile] }
+extension UnarchiveFilesRule: BuildRule {
+    var inputs: [URL] { [archiveFile] }
     var outputs: [URL] { [destinationDirectory] }
+}
+
+class UnarchiveFilesTask: ObservableTask<Void, Void> {
+    let rule: UnarchiveFilesRule
+    
+    // TODO: actually calcuate this once work begins
+    let estimatedFileCount = 30
+    
+    init(_ rule: UnarchiveFilesRule) {
+        self.rule = rule
+        super.init("Unpacking archive") { _ in () }
+    }
+    
+    // See https://developer.apple.com/documentation/accelerate/decompressing_and_extracting_an_archived_directory
+    override func work() async throws {
+        // Set up progress
+        progress.totalUnitCount = Int64(estimatedFileCount * 3) // 1 for start, 2 for finish
+        progress.fileOperationKind = .decompressingAfterDownloading
+        progress.fileTotalCount = estimatedFileCount
+        // TODO: scan over the archive and actually count up all the bytes and such
+        
+        let destinationName = rule.destinationDirectory.pathComponents.last ?? "unknown"
+        let tempName = "\(destinationName)-\(UUID())"
+        let tempPath = NSTemporaryDirectory() + tempName
+        
+        guard let inputFilePath = FilePath(rule.archiveFile) else {
+            throw AssetDownloadError.urlNotAFilePath(rule.archiveFile)
+        }
+        
+        guard let readFileStream = ArchiveByteStream.fileStream(
+            path: inputFilePath,
+            mode: .readOnly,
+            options: [],
+            permissions: FilePermissions(rawValue: 0o644)
+        ) else {
+            throw AssetDownloadError.cannotOpenArchive(inputFilePath)
+        }
+        
+        guard let decompressStream = ArchiveByteStream.decompressionStream(readingFrom: readFileStream) else {
+            throw AssetDownloadError.cannotDecodeArchive(inputFilePath)
+        }
+        defer {
+            try? decompressStream.close()
+        }
+        
+        guard let decodeStream = ArchiveStream.decodeStream(readingFrom: decompressStream) else {
+            throw AssetDownloadError.cannotDecompressArchive(inputFilePath)
+        }
+        defer {
+            try? decodeStream.close()
+        }
+        
+        if !FileManager.default.fileExists(atPath: tempPath) {
+            try FileManager.default.createDirectory(atPath: tempPath,
+                                                    withIntermediateDirectories: false)
+        }
+        
+        let tempFilePath = FilePath(tempPath)
+        guard let extractStream = ArchiveStream.extractStream(extractingTo: tempFilePath,
+                                                              flags: [.ignoreOperationNotPermitted])
+        else {
+            throw AssetDownloadError.cannotStartExtraction(archive: inputFilePath, destination: tempFilePath)
+        }
+        defer {
+            try? extractStream.close()
+        }
+        
+        _ = try ArchiveStream.process(readingFrom: decodeStream, writingTo: extractStream) { event, _, _ in
+            switch event {
+            case ArchiveHeader.EntryMessage.extractBegin:
+                self.progress.completedUnitCount += 1
+            case ArchiveHeader.EntryMessage.extractEnd:
+                self.progress.completedUnitCount += 2
+                self.progress.fileCompletedCount = (self.progress.fileCompletedCount ?? 0) + 1
+            default:
+                break
+            }
+            
+            return ArchiveHeader.EntryMessageStatus.ok
+        }
+    }
 }
 
 let MAX_ZIP_PART_SIZE = Measurement<UnitInformationStorage>.init(value: 2, unit: .gigabytes)
 
 struct DownloadModelRule {
     let model: GaussModel
-    let release: GithubRelease
+    let assetHost: AssetHost
     
-    var manifest: SplitZipFileManifest { getManifest(for: model)! }
+    var manifest: SplitArchiveManifest { getManifest(for: model)! }
     
-    var downloadJobs: [DownloadRule] { manifest.zipParts.enumerated().map { DownloadRule(
+    var downloadJobs: [DownloadRule] { manifest.archiveParts.enumerated().map { DownloadRule(
         manifesetFileName: $0.element,
-        remoteURL: release.baseURL.appendingPathComponent($0.element),
-        localURL: ApplicationSupportDir.inst.downloadsURL.appendingPathComponent(release.destinationFileName(sourceFileName: $0.element)),
+        remoteURL: assetHost.sourceURL(sourceFileName: $0.element),
+        localURL: ApplicationSupportDir.inst.downloadsURL.appendingPathComponent(assetHost.destinationFileName(sourceFileName: $0.element)),
         expectedBytes: manifest.uncompressedSize
     ) }}
     
     var concatJob: ConcatFilesRule { ConcatFilesRule(
         concat: downloadJobs.map { $0.localURL },
-        destination: ApplicationSupportDir.inst.downloadsURL.appendingPathComponent(release.destinationFileName(sourceFileName: manifest.destinationFile))
+        destination: ApplicationSupportDir.inst.downloadsURL.appendingPathComponent(assetHost.destinationFileName(sourceFileName: manifest.destinationFile))
     ) }
     
-    var unzipJob: UnzipFileRule {
-        UnzipFileRule(zipFile: concatJob.destination, destinationDirectory: ApplicationSupportDir.inst.modelURL(model))
+    var unzipJob: UnarchiveFilesRule {
+        UnarchiveFilesRule(archiveFile: concatJob.destination, destinationDirectory: ApplicationSupportDir.inst.modelURL(model))
     }
     
     func removeIntermediateOutputs() throws {
@@ -380,9 +491,9 @@ extension DownloadModelRule: BuildRule {
 }
 
 struct DownloadAllModelsRule {
-    let release: GithubRelease
+    let assetHost: AssetHost
     var jobs: [DownloadModelRule] {
-        GaussModel.allCases.map { DownloadModelRule(model: $0, release: release) }
+        GaussModel.allCases.map { DownloadModelRule(model: $0, assetHost: assetHost) }
     }
 }
 

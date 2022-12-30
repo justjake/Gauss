@@ -34,14 +34,16 @@ SPACE:=$(subst ,, )
 COMMA:=,
 MODEL_SPARSE_CHECKOUT_PATTERN=$(subst $(SPACE),$(COMMA),$(MODEL_SPARSE_CHECKOUT_PATTERNS))
 
-.PHONY: download zips clean clean-all
+.PHONY: download zips aars clean clean-all
 
 download: compiled-models/sd1.4 compiled-models/sd1.5 compiled-models/sd2
 zips: compiled-models/sd1.4.zip.00 compiled-models/sd1.5.zip.00 compiled-models/sd2.zip.00
+aars: compiled-models/sd1.4.aar.00 compiled-models/sd1.5.aar.00 compiled-models/sd2.aar.00
 
 clean:
 	@echo "Note: run 'make clean-all' to remove downloaded repos, which are large"
 	rm -rf compiled-models/*.zip*
+	rm -rf compiled-models/*.aar*
 	find compiled-models -maxdepth 1 -type l -delete
 
 clean-all:
@@ -77,9 +79,11 @@ compiled-models/%: compiled-models/%.repo
 compiled-models/%.zip: compiled-models/%
 	cd compiled-models && zip -r $(notdir $@) $(notdir $^)/
 
-# Split zips into 1900 MB chunks
-compiled-models/%.zip.00: compiled-models/%.zip
-	split -b 1900m -d $^ $^.
+# Archive directories with Apple Archive, which can be decompressed
+# using the standard library.
+compiled-models/%.aar: compiled-models/%
+	aa archive -d $^ -o $@
 
-# Please don't remove intermediate files
-.SECONDARY:
+# Split files into 1900 MB chunks
+compiled-models/%.00: compiled-models/%
+	split -b 1900m -d $^ $^.
