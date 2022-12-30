@@ -199,6 +199,7 @@ class GaussKernel: ObservableObject {
             resourcesAt: url,
             configuration: config
         )
+        try pipeline.loadResources()
         timer.stop()
         print("Create new StableDiffusionPipeline for model \(model): done after \(timer.median)s")
         return pipeline
