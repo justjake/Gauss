@@ -95,7 +95,7 @@ struct GaussKernelResources {
 
 extension [any ObservableTaskProtocol] {
     func ofType<T: ObservableTaskProtocol>(_ type: T.Type) -> [T] {
-        self.compactMap { $0 as? T }
+        compactMap { $0 as? T }
     }
 }
 
@@ -156,7 +156,7 @@ class GaussKernel: ObservableObject {
     }
         
     func loadModelJob(_ model: GaussModel) async -> LoadModelJob {
-         await self.pipelines.getLoadModelJob(model: model) {
+        await pipelines.getLoadModelJob(model: model) {
             self.watchJob(LoadModelJob(model) { _ in
                 try self.createPipeline(model)
             })
@@ -167,7 +167,7 @@ class GaussKernel: ObservableObject {
         forPrompt: GaussPrompt,
         count: Int
     ) -> GenerateImageJob {
-        let job = GenerateImageJob(forPrompt, count: count, execute: { job in try await self.performGenerateImageJob(job as! GenerateImageJob)}).onFailure { _ in
+        let job = GenerateImageJob(forPrompt, count: count, execute: { job in try await self.performGenerateImageJob(job as! GenerateImageJob) }).onFailure { _ in
             // Model might need to be reloaded to work.
             Task { await self.pipelines.drop(model: forPrompt.model) }
         }
@@ -244,12 +244,12 @@ class GaussKernel: ObservableObject {
             stepCount: Int(job.prompt.steps),
             seed: {
                 switch job.prompt.seed {
-                case .random: return Int.random(in: 0 ... Int(UInt32.max))
-                case .fixed(let value): return value
+                case .random: return UInt32.random(in: UInt32.min ... UInt32.max)
+                case .fixed(let value): return UInt32(value)
                 }
             }(),
-            disableSafety: !job.prompt.safety,
-            guidanceScale: Float(job.prompt.guidance)
+            guidanceScale: Float(job.prompt.guidance),
+            disableSafety: !job.prompt.safety
         ) {
             sampleTimer.stop()
                 

@@ -76,10 +76,10 @@ struct KernelStatusRow<Job: ObservableTaskProtocol>: View {
             case .cancelled:
                 EmptyView()
             }
-            
+
         }.frame(height: 18)
     }
-    
+
     var cancelButton: some View {
         Button(action: job.cancel) {
             Label("Cancel", systemImage: "xmark.circle.fill")
