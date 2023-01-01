@@ -147,7 +147,7 @@ protocol TaskableBuildRule: BuildRule {
 
 extension URL {
     var mtime: Date? {
-        let attributes = try? FileManager.default.attributesOfItem(atPath: absoluteString)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
         return attributes?[FileAttributeKey.modificationDate] as? Date
     }
 }
@@ -192,7 +192,7 @@ extension BuildRule {
     
     func removeOutputs() throws {
         for output in outputs {
-            if FileManager.default.fileExists(atPath: output.absoluteString) {
+            if FileManager.default.fileExists(atPath: output.path) {
                 try FileManager.default.removeItem(at: output)
             }
         }
@@ -218,7 +218,7 @@ enum AssetDownloadError: Error {
 }
 
 // TODO: implement https://developer.apple.com/documentation/foundation/url_loading_system/downloading_files_in_the_background
-class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessionTaskDelegate {
+class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDownloadDelegate {
     public let rule: DownloadRule
     private var completed = FulfillableTask<Void>()
     private var downloadTask: URLSessionDownloadTask?
@@ -230,7 +230,7 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
     }
     
     private lazy var urlSession: URLSession = {
-        let config = URLSessionConfiguration.background(withIdentifier: "background")
+        let config = URLSessionConfiguration.background(withIdentifier: "background-\(UUID())")
         // isDiscretionary - means do this slower. We want faster, so we can just start using
         // the data ASAP.
         // config.isDiscretionary = true
@@ -243,7 +243,6 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
         downloadTask.earliestBeginDate = Date.now
         downloadTask.countOfBytesClientExpectsToSend = 200
         downloadTask.countOfBytesClientExpectsToReceive = Int64(rule.expectedBytes.converted(to: .bytes).value)
-        downloadTask.delegate = self
         return downloadTask
     }
     
@@ -255,11 +254,13 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
     ) {
         do {
             print("DownloadTask: finished download to temporary location:", location)
+            try FileManager.default.createDirectory(at: rule.localURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.moveItem(at: location, to: rule.localURL)
             print("DownloadTask: moved to destination:", rule.localURL)
-            completed.fulfill(result: .success(()))
+            completed.resolve(())
         } catch {
-            completed.fulfill(result: .failure(error))
+            print("DownloadTask: completion handler failed:", error)
+            completed.reject(error)
         }
     }
 
@@ -267,9 +268,9 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let hasError = error {
             print("DownloadTask: failed:", hasError)
-            completed.fulfill(result: .failure(hasError))
+            completed.reject(hasError)
         } else {
-            completed.fulfill(result: .failure(AssetDownloadError.invalidSuccess("Should succeed elsewhere")))
+            print("DownloadTask: succeeded, but need to call `didFinishDownloadingTo` too")
         }
     }
     
@@ -317,7 +318,7 @@ class ConcatFilesTask: ObservableTask<Void, Void> {
     override func work() async throws {
         print("ConcatFilesTask: started for rule:", rule)
         let totalBytes = try rule.concat.map { input in
-            let attributes = try FileManager.default.attributesOfItem(atPath: input.absoluteString)
+            let attributes = try FileManager.default.attributesOfItem(atPath: input.path)
             let size = attributes[FileAttributeKey.size] as? NSNumber
             return size?.intValue ?? 0
         }.reduce(0) { $0 + $1 }
@@ -327,12 +328,14 @@ class ConcatFilesTask: ObservableTask<Void, Void> {
         progress.fileCompletedCount = 0
         print("ConcatFilesTask: initialized progress:", progress)
         
+        try FileManager.default.createDirectory(at: rule.destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: rule.destination.path, contents: nil)
         let output = try FileHandle(forWritingTo: rule.destination)
 
         for inputURL in rule.concat {
             print("ConcatFulesTask: concat file:", inputURL)
             let input = try FileHandle(forReadingFrom: inputURL)
-            do {
+            while true {
                 guard let buffer = try input.read(upToCount: bufferSize) else {
                     break
                 }
@@ -349,6 +352,7 @@ class ConcatFilesTask: ObservableTask<Void, Void> {
             await Task.yield()
         }
         
+        try output.synchronize()
         output.closeFile()
         print("ConcatFilesTask: done writing to output:", rule.destination)
     }
@@ -394,15 +398,7 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
     }
     
     // See https://developer.apple.com/documentation/accelerate/decompressing_and_extracting_an_archived_directory
-    override func work() async throws {
-        print("UnarchiveFilesTask: started for rule:", rule)
-        // Set up progress
-        progress.totalUnitCount = Int64(estimatedFileCount * 3) // 1 for start, 2 for finish
-        progress.fileOperationKind = .decompressingAfterDownloading
-        progress.fileTotalCount = estimatedFileCount
-        // TODO: scan over the archive and actually count up all the bytes and such
-        print("UnarchiveFilesTask: initialized progress:", progress)
-        
+    func unarchiveToTempdir() throws -> URL {
         let destinationName = rule.destinationDirectory.pathComponents.last ?? "unknown"
         let tempName = "\(destinationName)-\(UUID())"
         let tempPath = NSTemporaryDirectory() + tempName
@@ -435,11 +431,7 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
             try? decodeStream.close()
         }
         
-        if !FileManager.default.fileExists(atPath: tempPath) {
-            try FileManager.default.createDirectory(atPath: tempPath,
-                                                    withIntermediateDirectories: false)
-        }
-        
+        try FileManager.default.createDirectory(atPath: tempPath, withIntermediateDirectories: true)
         let tempFilePath = FilePath(tempPath)
         guard let extractStream = ArchiveStream.extractStream(extractingTo: tempFilePath,
                                                               flags: [.ignoreOperationNotPermitted])
@@ -450,24 +442,38 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
             try? extractStream.close()
         }
         
-        _ = try ArchiveStream.process(readingFrom: decodeStream, writingTo: extractStream) { event, file, _ in
-            switch event {
-            case ArchiveHeader.EntryMessage.extractBegin:
-                print("UnarchiveFilesTask: unarchiving file:", file)
-                self.progress.completedUnitCount += 1
-            case ArchiveHeader.EntryMessage.extractEnd:
-                self.progress.completedUnitCount += 2
-                self.progress.fileCompletedCount = (self.progress.fileCompletedCount ?? 0) + 1
-            default:
-                break
-            }
-            
-            return ArchiveHeader.EntryMessageStatus.ok
-        }
+        _ = try ArchiveStream.process(readingFrom: decodeStream, writingTo: extractStream) /* { event, file, _ in
+         switch event {
+         case ArchiveHeader.EntryMessage.extractBegin:
+         print("UnarchiveFilesTask: unarchiving file:", file)
+         self.progress.completedUnitCount += 1
+         case ArchiveHeader.EntryMessage.extractEnd:
+         self.progress.completedUnitCount += 2
+         self.progress.fileCompletedCount = (self.progress.fileCompletedCount ?? 0) + 1
+         default:
+         break
+         }
+                                                                                            
+         return ArchiveHeader.EntryMessageStatus.ok
+         } */
         print("UnarchiveFilesTask: done unarchiving all files")
+        return URL(filePath: tempPath)
+    }
+
+    override func work() async throws {
+        print("UnarchiveFilesTask: started for rule:", rule)
+        // Set up progress
+        progress.totalUnitCount = Int64(estimatedFileCount * 3) // 1 for start, 2 for finish
+        progress.fileOperationKind = .decompressingAfterDownloading
+        progress.fileTotalCount = estimatedFileCount
+        // TODO: scan over the archive and actually count up all the bytes and such
+        print("UnarchiveFilesTask: initialized progress:", progress)
         
-        try FileManager.default.moveItem(at: URL(filePath: tempPath), to: rule.destinationDirectory)
-        print("UnarchiveFilesTask: moved \(tempPath) to \(rule.destinationDirectory)")
+        let tempUrl = try unarchiveToTempdir()
+        
+        try FileManager.default.createDirectory(at: rule.destinationDirectory.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: tempUrl, to: rule.destinationDirectory)
+        print("UnarchiveFilesTask: moved \(tempUrl) to \(rule.destinationDirectory)")
     }
 }
 
@@ -544,6 +550,7 @@ extension DownloadAllModelsRule: CompositeBuildRule {
 enum RuleScheduler {
     static func executeInOrder(_ rules: [BuildRule]) async throws {
         for rule in rules {
+            print("RuleScheduler.executeInOrder: rule", rule)
             switch rule {
             case let composite as CompositeBuildRule:
                 try await executeInOrder(composite.rules)

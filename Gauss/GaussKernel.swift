@@ -58,17 +58,30 @@ class PreloadModelJob: ObservableTask<StableDiffusionPipeline, Never> {
     }
 }
 
-struct GaussKernelResources {
-    var sd2Production: URL {
-        return Bundle.main.url(forResource: "sd2", withExtension: nil)!
+protocol ModelLocator {
+    func locateModel(model: GaussModel) -> URL?
+}
+
+struct BundleResourceModelLocator: ModelLocator {
+    func locateModel(model: GaussModel) -> URL? {
+        switch model {
+        case .sd2_0:
+            return Bundle.main.url(forResource: "sd2", withExtension: nil)
+        case .sd1_5:
+            return Bundle.main.url(forResource: "sd1.5", withExtension: nil)
+        case .sd1_4:
+            return Bundle.main.url(forResource: "sd1.4", withExtension: nil)!
+        }
     }
-    
-    var sd14Production: URL {
-        return Bundle.main.url(forResource: "sd1.4", withExtension: nil)!
-    }
-    
-    var sd15Production: URL {
-        return Bundle.main.url(forResource: "sd1.5", withExtension: nil)!
+}
+
+struct ApplicationSupportModelLocator: ModelLocator {
+    func locateModel(model: GaussModel) -> URL? {
+        let url = ApplicationSupportDir.inst.modelURL(model)
+        if FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return nil
     }
 }
 
@@ -107,7 +120,7 @@ class GaussKernel: ObservableObject {
         return !loadedModels.isEmpty
     }
     
-    private let resources = GaussKernelResources()
+    private let resources = ApplicationSupportModelLocator()
     private let pipelines = ModelRepository()
     private var inferenceQueue = AsyncQueue()
     
@@ -162,14 +175,10 @@ class GaussKernel: ObservableObject {
         config.computeUnits = .all
         
         let url: URL = {
-            switch model {
-            case .sd2_0:
-                return self.resources.sd2Production
-            case .sd1_4:
-                return self.resources.sd14Production
-            case .sd1_5:
-                return self.resources.sd15Production
+            guard let url = resources.locateModel(model: model) else {
+                return URL(filePath: "/MODEL_NOT_FOUND")
             }
+            return url
         }()
         
         let pipeline = try StableDiffusionPipeline(

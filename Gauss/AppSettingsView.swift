@@ -87,7 +87,7 @@ struct AppSettingsView: View {
         Button("Download and install models") {
             Task {
                 let rule = DownloadAllModelsRule(assetHost: assetHost)
-                try await RuleScheduler.executeInOrder(rule.rules)
+                try! await RuleScheduler.executeInOrder(rule.rules)
             }
         }
     }
