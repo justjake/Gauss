@@ -363,7 +363,7 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     func waitFor<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
         await MainActor.run { waitingFor.insert(job: other) }
         progress.totalUnitCount += 1
-        progress.addChild(other.progress, withPendingUnitCount: 1)
+//        progress.addChild(other.progress, withPendingUnitCount: 1)
         let result = await other.task.result
         await MainActor.run { waitingFor.remove(job: other) }
         return try result.get()
