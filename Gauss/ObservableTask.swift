@@ -275,6 +275,7 @@ protocol ObservableTaskProtocol: ObservableObject, Identifiable {
     @MainActor var anyState: ObservableTaskState<Any, Any> { get }
     @discardableResult func resume() -> Self
     func wait() async
+    func waitSuccess() async throws
     func cancel()
 }
 
@@ -285,6 +286,10 @@ extension ObservableTask: ObservableTaskProtocol {
 
     func wait() async {
         _ = await task.result
+    }
+    
+    func waitSuccess() async throws {
+        _ = try await task.value
     }
 }
 

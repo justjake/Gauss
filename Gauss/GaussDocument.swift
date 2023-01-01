@@ -48,14 +48,12 @@ enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvert
     case sd2_0
     case sd1_4
     case sd1_5
-    case custom(URL)
     
     var description: String {
         switch self {
         case .sd1_5: return "Stable Diffusion 1.5"
         case .sd1_4: return "Stable Diffusion 1.4"
         case .sd2_0: return "Stable Diffusion 2.0"
-        case .custom(let url): return "Custom (\(url))"
         }
     }
 }

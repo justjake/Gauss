@@ -30,7 +30,7 @@ class GenerateImageJob: ObservableTask<
         self.count = count
         let noun = count > 1 ? "\(count)" : ""
         super.init("Imagine \(noun)", execute)
-        self.progress.totalUnitCount = Int64(count)
+        progress.totalUnitCount = Int64(count)
     }
 }
 
@@ -169,8 +169,6 @@ class GaussKernel: ObservableObject {
                 return self.resources.sd14Production
             case .sd1_5:
                 return self.resources.sd15Production
-            case .custom(let url):
-                return url
             }
         }()
         

@@ -43,9 +43,6 @@ struct ApplicationSupportDir {
             case .sd1_4: return "sd1.4"
             case .sd2_0: return "sd2.0"
             case .sd1_5: return "sd1.5"
-            case .custom(let url):
-                let safeURL = String(describing: url).replacing(try! Regex("[^\\w]")) { _ in "" }
-                return "custom-\(safeURL)"
             }
         }()
         
@@ -71,9 +68,9 @@ protocol AssetHost {
 }
 
 struct GithubRelease: AssetHost {
-    let owner = "justjake"
-    let repo = "Gauss"
-    let tag: String
+    var owner = "justjake"
+    var repo = "Gauss"
+    var tag: String
     
     /// Example URL:
     /// https://github.com/divamgupta/diffusionbee-stable-diffusion-ui/releases/download/1.5.1/DiffusionBee-1.5.1-arm64_MPS_SD1.5_FP16.dmg
@@ -103,7 +100,7 @@ struct TestAssetHost: AssetHost {
     }
 }
 
-func getManifest(for model: GaussModel) -> SplitArchiveManifest? {
+func getManifest(for model: GaussModel) -> SplitArchiveManifest {
     switch model {
     case .sd2_0: return SplitArchiveManifest(
             destinationFile: "sd2.aar",
@@ -129,8 +126,6 @@ func getManifest(for model: GaussModel) -> SplitArchiveManifest? {
             ],
             uncompressedSize: .init(value: 5226992, unit: .bytes)
         )
-    case .custom:
-        return nil
     }
 }
 
@@ -141,7 +136,13 @@ protocol BuildRule {
 }
 
 protocol CompositeBuildRule: BuildRule {
+    var outputs: [URL] { get }
+    var inputs: [URL] { get }
     var rules: [BuildRule] { get }
+}
+
+protocol TaskableBuildRule: BuildRule {
+    func createTask() -> any ObservableTaskProtocol
 }
 
 extension URL {
@@ -198,16 +199,6 @@ extension BuildRule {
     }
 }
 
-// TODO: re-impement make
-struct BuildPipelineRule {
-    let rules: [any BuildRule]
-    
-    func planTarget(target: BuildRule) throws -> BuildRule {
-        // TODO:
-        throw QueueJobError.invalidState("not implemented")
-    }
-}
-
 // TODO: make subclass of ObservableTask
 struct DownloadRule {
     let manifesetFileName: String
@@ -223,6 +214,7 @@ enum AssetDownloadError: Error {
     case cannotDecompressArchive(FilePath)
     case cannotDecodeArchive(FilePath)
     case cannotStartExtraction(archive: FilePath, destination: FilePath)
+    case unschedulableRule(BuildRule)
 }
 
 // TODO: implement https://developer.apple.com/documentation/foundation/url_loading_system/downloading_files_in_the_background
@@ -262,7 +254,9 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
         didFinishDownloadingTo location: URL
     ) {
         do {
+            print("DownloadTask: finished download to temporary location:", location)
             try FileManager.default.moveItem(at: location, to: rule.localURL)
+            print("DownloadTask: moved to destination:", rule.localURL)
             completed.fulfill(result: .success(()))
         } catch {
             completed.fulfill(result: .failure(error))
@@ -272,6 +266,7 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
     // Called when the download fails. We handle the
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let hasError = error {
+            print("DownloadTask: failed:", hasError)
             completed.fulfill(result: .failure(hasError))
         } else {
             completed.fulfill(result: .failure(AssetDownloadError.invalidSuccess("Should succeed elsewhere")))
@@ -279,22 +274,29 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
     }
     
     override func work() async throws -> URL {
+        print("DownloadTask: started for rule:", rule)
         let downloadTask = createDownloadTask()
         // TODO: figure out how to shimmy this assignment in case a parent task already observed the old progress instance... does this work?
         progress = downloadTask.progress
+        print("DownloadTask: initialized progress:", progress)
         downloadTask.resume()
         _ = try await completed.task.value
+        print("DownloadTask: done")
         return rule.localURL
     }
 }
 
-extension DownloadRule: BuildRule {
+extension DownloadRule: TaskableBuildRule {
     var outputs: [URL] {
         [localURL]
     }
     
     var inputs: [URL] {
         [remoteURL]
+    }
+    
+    func createTask() -> any ObservableTaskProtocol {
+        return DownloadTask(self)
     }
 }
 
@@ -313,6 +315,7 @@ class ConcatFilesTask: ObservableTask<Void, Void> {
     }
     
     override func work() async throws {
+        print("ConcatFilesTask: started for rule:", rule)
         let totalBytes = try rule.concat.map { input in
             let attributes = try FileManager.default.attributesOfItem(atPath: input.absoluteString)
             let size = attributes[FileAttributeKey.size] as? NSNumber
@@ -322,10 +325,12 @@ class ConcatFilesTask: ObservableTask<Void, Void> {
         progress.fileTotalCount = rule.concat.count
         progress.fileOperationKind = .copying
         progress.fileCompletedCount = 0
+        print("ConcatFilesTask: initialized progress:", progress)
         
         let output = try FileHandle(forWritingTo: rule.destination)
 
         for inputURL in rule.concat {
+            print("ConcatFulesTask: concat file:", inputURL)
             let input = try FileHandle(forReadingFrom: inputURL)
             do {
                 guard let buffer = try input.read(upToCount: bufferSize) else {
@@ -340,20 +345,26 @@ class ConcatFilesTask: ObservableTask<Void, Void> {
             }
             input.closeFile()
             progress.fileCompletedCount = (progress.fileCompletedCount ?? 0) + 1
+            print("ConcatFilesTask: concat file complete:", inputURL)
             await Task.yield()
         }
         
         output.closeFile()
+        print("ConcatFilesTask: done writing to output:", rule.destination)
     }
 }
 
-extension ConcatFilesRule: BuildRule {
+extension ConcatFilesRule: TaskableBuildRule {
     var outputs: [URL] {
         [destination]
     }
     
     var inputs: [URL] {
         concat
+    }
+    
+    func createTask() -> any ObservableTaskProtocol {
+        return ConcatFilesTask(self)
     }
 }
 
@@ -363,9 +374,12 @@ struct UnarchiveFilesRule {
     // Note: we could add support for archive UTIType or something if we want to support .zip as well
 }
 
-extension UnarchiveFilesRule: BuildRule {
+extension UnarchiveFilesRule: TaskableBuildRule {
     var inputs: [URL] { [archiveFile] }
     var outputs: [URL] { [destinationDirectory] }
+    func createTask() -> any ObservableTaskProtocol {
+        return UnarchiveFilesTask(self)
+    }
 }
 
 class UnarchiveFilesTask: ObservableTask<Void, Void> {
@@ -381,15 +395,18 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
     
     // See https://developer.apple.com/documentation/accelerate/decompressing_and_extracting_an_archived_directory
     override func work() async throws {
+        print("UnarchiveFilesTask: started for rule:", rule)
         // Set up progress
         progress.totalUnitCount = Int64(estimatedFileCount * 3) // 1 for start, 2 for finish
         progress.fileOperationKind = .decompressingAfterDownloading
         progress.fileTotalCount = estimatedFileCount
         // TODO: scan over the archive and actually count up all the bytes and such
+        print("UnarchiveFilesTask: initialized progress:", progress)
         
         let destinationName = rule.destinationDirectory.pathComponents.last ?? "unknown"
         let tempName = "\(destinationName)-\(UUID())"
         let tempPath = NSTemporaryDirectory() + tempName
+        print("UnarchiveFilesTask: will unarchive to tempdir:", tempPath)
         
         guard let inputFilePath = FilePath(rule.archiveFile) else {
             throw AssetDownloadError.urlNotAFilePath(rule.archiveFile)
@@ -433,9 +450,10 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
             try? extractStream.close()
         }
         
-        _ = try ArchiveStream.process(readingFrom: decodeStream, writingTo: extractStream) { event, _, _ in
+        _ = try ArchiveStream.process(readingFrom: decodeStream, writingTo: extractStream) { event, file, _ in
             switch event {
             case ArchiveHeader.EntryMessage.extractBegin:
+                print("UnarchiveFilesTask: unarchiving file:", file)
                 self.progress.completedUnitCount += 1
             case ArchiveHeader.EntryMessage.extractEnd:
                 self.progress.completedUnitCount += 2
@@ -446,6 +464,10 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
             
             return ArchiveHeader.EntryMessageStatus.ok
         }
+        print("UnarchiveFilesTask: done unarchiving all files")
+        
+        try FileManager.default.moveItem(at: URL(filePath: tempPath), to: rule.destinationDirectory)
+        print("UnarchiveFilesTask: moved \(tempPath) to \(rule.destinationDirectory)")
     }
 }
 
@@ -455,7 +477,7 @@ struct DownloadModelRule {
     let model: GaussModel
     let assetHost: AssetHost
     
-    var manifest: SplitArchiveManifest { getManifest(for: model)! }
+    var manifest: SplitArchiveManifest { getManifest(for: model) }
     
     var downloadJobs: [DownloadRule] { manifest.archiveParts.enumerated().map { DownloadRule(
         manifesetFileName: $0.element,
@@ -473,6 +495,10 @@ struct DownloadModelRule {
         UnarchiveFilesRule(archiveFile: concatJob.destination, destinationDirectory: ApplicationSupportDir.inst.modelURL(model))
     }
     
+    var intermediateOutputs: [URL] {
+        return downloadJobs.flatMap(\.outputs) + concatJob.outputs
+    }
+    
     func removeIntermediateOutputs() throws {
         try downloadJobs.forEach { try $0.removeOutputs() }
         try concatJob.removeOutputs()
@@ -480,7 +506,7 @@ struct DownloadModelRule {
 }
 
 // TODO:
-extension DownloadModelRule: BuildRule {
+extension DownloadModelRule: CompositeBuildRule {
     var inputs: [URL] {
         downloadJobs.map { $0.remoteURL }
     }
@@ -488,22 +514,48 @@ extension DownloadModelRule: BuildRule {
     var outputs: [URL] {
         [unzipJob.destinationDirectory]
     }
+    
+    var rules: [BuildRule] {
+        return downloadJobs + [concatJob, unzipJob]
+    }
 }
 
 struct DownloadAllModelsRule {
     let assetHost: AssetHost
-    var jobs: [DownloadModelRule] {
+    var downloadRules: [DownloadModelRule] {
         GaussModel.allCases.map { DownloadModelRule(model: $0, assetHost: assetHost) }
     }
 }
 
-// TODO:
-extension DownloadAllModelsRule: BuildRule {
+extension DownloadAllModelsRule: CompositeBuildRule {
+    var rules: [BuildRule] {
+        downloadRules.map { $0 }
+    }
+    
     var outputs: [URL] {
-        jobs.flatMap { $0.outputs }
+        downloadRules.flatMap { $0.outputs }
     }
     
     var inputs: [URL] {
-        jobs.flatMap { $0.inputs }
+        downloadRules.flatMap { $0.inputs }
+    }
+}
+
+enum RuleScheduler {
+    static func executeInOrder(_ rules: [BuildRule]) async throws {
+        for rule in rules {
+            switch rule {
+            case let composite as CompositeBuildRule:
+                try await executeInOrder(composite.rules)
+            case let taskable as TaskableBuildRule:
+                if try taskable.outputsOutOfDate() {
+                    let task = taskable.createTask()
+                    task.resume()
+                    try await task.waitSuccess()
+                }
+            default:
+                throw AssetDownloadError.unschedulableRule(rule)
+            }
+        }
     }
 }
