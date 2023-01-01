@@ -85,6 +85,42 @@ struct ApplicationSupportModelLocator: ModelLocator {
     }
 }
 
+struct DeveloperOnlyModelLocator: ModelLocator {
+    func locateModel(model: GaussModel) -> URL? {
+        let thisFileURL = URL(filePath: #file)
+        let rootDirectory = thisFileURL.deletingLastPathComponent().deletingLastPathComponent()
+        let compiledModels = rootDirectory.appendingPathComponent("compiled-models")
+        
+        switch model {
+        case .sd2_0:
+            return compiledModels.appendingPathComponent("sd2")
+        case .sd1_5:
+            return compiledModels.appendingPathComponent("sd1.5")
+        case .sd1_4:
+            return compiledModels.appendingPathComponent("sd1.4")
+        }
+    }
+}
+
+struct TryEachModelLocator: ModelLocator {
+    let locators: [ModelLocator]
+    
+    func locateModel(model: GaussModel) -> URL? {
+        for locator in locators {
+            if let url = locator.locateModel(model: model) {
+                return url
+            }
+        }
+        return nil
+    }
+    
+    static var inst = TryEachModelLocator(locators: [
+        ApplicationSupportModelLocator(),
+        BundleResourceModelLocator(),
+        DeveloperOnlyModelLocator(),
+    ])
+}
+
 extension [any ObservableTaskProtocol] {
     func ofType<T: ObservableTaskProtocol>(_ type: T.Type) -> [T] {
         compactMap { $0 as? T }
@@ -120,7 +156,7 @@ class GaussKernel: ObservableObject {
         return !loadedModels.isEmpty
     }
     
-    private let resources = ApplicationSupportModelLocator()
+    private let resources = TryEachModelLocator.inst
     private let pipelines = ModelRepository()
     private var inferenceQueue = AsyncQueue()
     
