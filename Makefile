@@ -2,7 +2,7 @@ PROJECT:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 GIT_CLONE_SPARSE=GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1
 
 # can be original or split_einsum
-ATTENTION_TYPE=original
+ATTENTION_TYPE=split_einsum
 ORIGINAL_MODEL_FILES=Unet.mlmodelc
 SPLIT_EINSUM_MODEL_FILES=UnetChunk1.mlmodelc UnetChunk2.mlmodelc
 
