@@ -58,69 +58,6 @@ class PreloadModelJob: ObservableTask<StableDiffusionPipeline, Never> {
     }
 }
 
-protocol ModelLocator {
-    func locateModel(model: GaussModel) -> URL?
-}
-
-struct BundleResourceModelLocator: ModelLocator {
-    func locateModel(model: GaussModel) -> URL? {
-        switch model {
-        case .sd2_0:
-            return Bundle.main.url(forResource: "sd2", withExtension: nil)
-        case .sd1_5:
-            return Bundle.main.url(forResource: "sd1.5", withExtension: nil)
-        case .sd1_4:
-            return Bundle.main.url(forResource: "sd1.4", withExtension: nil)!
-        }
-    }
-}
-
-struct ApplicationSupportModelLocator: ModelLocator {
-    func locateModel(model: GaussModel) -> URL? {
-        let url = ApplicationSupportDir.inst.modelURL(model)
-        if FileManager.default.fileExists(atPath: url.path) {
-            return url
-        }
-        return nil
-    }
-}
-
-struct DeveloperOnlyModelLocator: ModelLocator {
-    func locateModel(model: GaussModel) -> URL? {
-        let thisFileURL = URL(filePath: #file)
-        let rootDirectory = thisFileURL.deletingLastPathComponent().deletingLastPathComponent()
-        let compiledModels = rootDirectory.appendingPathComponent("compiled-models")
-        
-        switch model {
-        case .sd2_0:
-            return compiledModels.appendingPathComponent("sd2")
-        case .sd1_5:
-            return compiledModels.appendingPathComponent("sd1.5")
-        case .sd1_4:
-            return compiledModels.appendingPathComponent("sd1.4")
-        }
-    }
-}
-
-struct TryEachModelLocator: ModelLocator {
-    let locators: [ModelLocator]
-    
-    func locateModel(model: GaussModel) -> URL? {
-        for locator in locators {
-            if let url = locator.locateModel(model: model) {
-                return url
-            }
-        }
-        return nil
-    }
-    
-    static var inst = TryEachModelLocator(locators: [
-        ApplicationSupportModelLocator(),
-        BundleResourceModelLocator(),
-        DeveloperOnlyModelLocator(),
-    ])
-}
-
 extension [any ObservableTaskProtocol] {
     func ofType<T: ObservableTaskProtocol>(_ type: T.Type) -> [T] {
         compactMap { $0 as? T }
@@ -149,14 +86,14 @@ actor ModelRepository {
     }
 }
 
-class GaussKernel: ObservableObject {
+class GaussKernel: ObservableObject, RuleScheduler {
     @MainActor @Published var jobs = ObservableTaskDictionary()
     @MainActor @Published var loadedModels = Set<GaussModel>()
     @MainActor var ready: Bool {
         return !loadedModels.isEmpty
     }
     
-    private let resources = TryEachModelLocator.inst
+    private let resources = AssetManager.inst
     private let pipelines = ModelRepository()
     private var inferenceQueue = AsyncQueue()
     
@@ -251,7 +188,7 @@ class GaussKernel: ObservableObject {
             
         print("Fetching pipeline for job \(job.id)")
         let loadModel = await loadModelJob(job.prompt.model)
-        let pipeline: StableDiffusionPipeline = try await job.waitFor(loadModel.resume())
+        let pipeline: StableDiffusionPipeline = try await job.waitForValue(loadModel.resume())
             
         if Task.isCancelled {
             print("Canelled after building pipeline")
@@ -294,5 +231,43 @@ class GaussKernel: ObservableObject {
         print("pipeline.generateImages returned \(notNilCount) images and \(nilCount) nils")
             
         return result.map { $0?.asNSImage() }
+    }
+    
+    func schedule(rule: BuildRule) -> any ObservableTaskProtocol {
+        switch rule {
+        case let composite as CompositeBuildRule:
+            let subrules = flattenRule(rule: composite)
+            return ObservableTask<Void, Void>(composite.label) { job in
+                for rule in subrules {
+                    if try rule.outputsOutOfDate() {
+                        let task = rule.createTask()
+                        self.watchJob(task).resume()
+                        try await job.waitFor(task)
+                    }
+                }
+            }
+        case let taskable as any TaskableBuildRule:
+            let label = taskable.createTask().label
+            let composite = BuildRuleList(label: label, rules: [taskable])
+            return schedule(rule: composite)
+        default:
+            fatalError("Not schedulable")
+        }
+    }
+    
+    private func flattenRule(rule: CompositeBuildRule) -> [any TaskableBuildRule] {
+        var rules = [any TaskableBuildRule]()
+        for rule in rule.rules {
+            switch rule {
+            case let composite as CompositeBuildRule:
+                let subtasks = flattenRule(rule: composite)
+                rules.append(contentsOf: subtasks)
+            case let taskable as any TaskableBuildRule:
+                rules.append(taskable)
+            default:
+                continue
+            }
+        }
+        return rules
     }
 }

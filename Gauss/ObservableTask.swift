@@ -360,13 +360,19 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
         }
     }
     
-    func waitFor<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
+    func waitForValue<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
+        try await waitFor(other)
+        return try await other.task.result.get()
+    }
+    
+    func waitFor(_ other: any ObservableTaskProtocol) async throws {
         await MainActor.run { waitingFor.insert(job: other) }
         progress.totalUnitCount += 1
-//        progress.addChild(other.progress, withPendingUnitCount: 1)
-        let result = await other.task.result
+        // TODO: figure out how we want to do tracking
+        //        progress.addChild(other.progress, withPendingUnitCount: 1)
+        await other.wait()
         await MainActor.run { waitingFor.remove(job: other) }
-        return try result.get()
+        try await other.waitSuccess()
     }
     
     func cancel(reason: String) {

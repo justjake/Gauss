@@ -25,18 +25,20 @@ let DEFAULT_GITHUB_OWNER = "justjake"
 let DEFAULT_GITHUB_REPO = "Gauss"
 let DEFAULT_GITHUB_TAG = "models-v1.0.0"
 
-struct AppSettingsView: View {
-    @AppStorage("modelDownloadSource") private var modelDownloadSource: ModelDownloadSource = .githubRelease
+class AppSettingsModel: ObservableObject {
+    static var inst = AppSettingsModel()
+
+    @AppStorage("modelDownloadSource") var modelDownloadSource: ModelDownloadSource = .githubRelease
 
     // Github setings
-    @AppStorage("githubOwner") private var owner = DEFAULT_GITHUB_OWNER
-    @AppStorage("githubRepo") private var repo = DEFAULT_GITHUB_REPO
-    @AppStorage("githubReleaseType") private var releaseType = GithubReleaseSetting.compatible
-    @AppStorage("githubTag") private var tag = ""
+    @AppStorage("githubOwner") var owner = DEFAULT_GITHUB_OWNER
+    @AppStorage("githubRepo") var repo = DEFAULT_GITHUB_REPO
+    @AppStorage("githubReleaseType") var releaseType = GithubReleaseSetting.compatible
+    @AppStorage("githubTag") var tag = ""
 
     // Custom URL settings
-    @AppStorage("customURL") private var customURL = URL(string: "http://localhost:8080")!
-    @AppStorage("customNamespace") private var customNamespace = "custom"
+    @AppStorage("customURL") var customURL = URL(string: "http://localhost:8080")!
+    @AppStorage("customNamespace") var customNamespace = "custom"
 
     var assetHost: AssetHost {
         switch modelDownloadSource {
@@ -56,39 +58,60 @@ struct AppSettingsView: View {
             return TestAssetHost(baseURL: customURL, localPrefix: customNamespace)
         }
     }
+}
+
+struct AppSettingsView: View {
+    @ObservedObject var appSettings = AppSettingsModel.inst
+
+    var assetHost: AssetHost {
+        switch appSettings.modelDownloadSource {
+        case .githubRelease:
+            let selectedTag = {
+                switch appSettings.releaseType {
+                case .compatible: return DEFAULT_GITHUB_TAG
+                case .tag:
+                    if appSettings.tag.isEmpty {
+                        return DEFAULT_GITHUB_TAG
+                    }
+                    return appSettings.tag
+                }
+            }()
+            return GithubRelease(owner: appSettings.owner, repo: appSettings.repo, tag: selectedTag)
+        case .custom:
+            return TestAssetHost(baseURL: appSettings.customURL, localPrefix: appSettings.customNamespace)
+        }
+    }
 
     var body: some View {
-        Group {
-            Form {
-                Picker("Download models from", selection: $modelDownloadSource) {
-                    Text("Github (default)").tag(ModelDownloadSource.githubRelease)
-                    Text("Custom host").tag(ModelDownloadSource.custom)
-                }
-
-                switch modelDownloadSource {
-                case .githubRelease:
-                    GithubReleaseForm(owner: $owner, repo: $repo, releaseType: $releaseType, tag: $tag)
-                case .custom:
-                    CustomSourceForm(url: $customURL, namespace: $customNamespace)
+        VStack {
+            List {
+                ForEach(GaussModel.allCases, id: \.self) { model in
+                    ModelInstallView(model: model, assetHost: assetHost)
                 }
             }
 
-            Text("Models")
+            DisclosureGroup("Advanced") {
+                Form {
+                    Picker("Download models from", selection: appSettings.$modelDownloadSource) {
+                        Text("Github (default)").tag(ModelDownloadSource.githubRelease)
+                        Text("Custom host").tag(ModelDownloadSource.custom)
+                    }
 
-            Text("TODO: show list of installed models here and allow deleting / re-installing")
-        }.padding()
+                    switch appSettings.modelDownloadSource {
+                    case .githubRelease:
+                        GithubReleaseForm(owner: appSettings.$owner, repo: appSettings.$repo, releaseType: appSettings.$releaseType, tag: appSettings.$tag)
+                    case .custom:
+                        CustomSourceForm(url: appSettings.$customURL, namespace: appSettings.$customNamespace)
+                    }
+                }
+            }.padding(.horizontal)
 
-        List {
-            ModelInstallView(model: .sd1_4, assetHost: assetHost)
-            ModelInstallView(model: .sd1_5, assetHost: assetHost)
-            ModelInstallView(model: .sd2_0, assetHost: assetHost)
-        }
-
-        Button("Download and install models") {
-            Task {
-                let rule = DownloadAllModelsRule(assetHost: assetHost)
-                try! await RuleScheduler.executeInOrder(rule.rules)
-            }
+            Button("Download and install models") {
+                Task {
+                    let rule = DownloadAllModelsRule(assetHost: assetHost)
+                    try! await RuleExecutor.executeInOrder(rule.rules)
+                }
+            }.padding(.bottom)
         }
     }
 }
@@ -118,7 +141,7 @@ struct GithubReleaseForm: View {
                 repo = DEFAULT_GITHUB_REPO
                 releaseType = .compatible
             }
-        }.padding()
+        }
     }
 }
 
@@ -130,7 +153,7 @@ struct CustomSourceForm: View {
         Form {
             TextField("URL", text: .constant(url.description)).disabled(true)
             TextField("Namespace", text: $namespace)
-        }.padding()
+        }
     }
 }
 
@@ -141,26 +164,48 @@ struct ModelInstallView: View {
         DownloadModelRule(model: model, assetHost: assetHost)
     }
 
+    @ObservedObject var assetManager = AssetManager.inst
+    var scheduler: RuleScheduler?
+
+    var hasModel: Bool {
+        assetManager.cachedModelLocations.keys.contains(model)
+    }
+
     var body: some View {
-        VStack {
-            Text(model.description).font(.title3)
+        HStack {
+            VStack(alignment: .leading) {
+                Text(model.description).font(.title3)
 
-            ForEach(downloadRule.inputs, id: \.self) { url in
-                Text("Input: \(url)")
+                ForEach(downloadRule.inputs, id: \.self) { url in
+                    Text("Input: \(url)")
+                }
+
+                ForEach(downloadRule.intermediateOutputs, id: \.self) { url in
+                    Text("Intermediate: \(url)")
+                }
+
+                ForEach(downloadRule.outputs, id: \.self) { url in
+                    Text("Output: \(url)")
+                }
+
+                // TODO: show model status
+                // TODO: if present, allow re-intalling
+                // TODO: if absent, allow installing
+                Divider()
+            }.multilineTextAlignment(.leading)
+
+            if scheduler != nil {
+                if hasModel {
+                    Button("Reinstall") { install() }
+                } else {
+                    Button("Install") { install() }
+                }
             }
+        }
+    }
 
-            ForEach(downloadRule.intermediateOutputs, id: \.self) { url in
-                Text("Intermediate: \(url)")
-            }
-
-            ForEach(downloadRule.outputs, id: \.self) { url in
-                Text("Output: \(url)")
-            }
-
-            // TODO: show model status
-            // TODO: if present, allow re-intalling
-            // TODO: if absent, allow installing
-        }.multilineTextAlignment(.leading)
+    func install() {
+        
     }
 }
 

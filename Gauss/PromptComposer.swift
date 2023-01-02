@@ -11,16 +11,29 @@ struct PromptComposer: View {
     @Binding var document: GaussDocument
     @State var count = 1
     @EnvironmentObject var kernel: GaussKernel
+    @ObservedObject var assets = AssetManager.inst
     var submitAction: () -> Void
+    var forceShow = false
 
     var body: some View {
         VStack {
-            PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
-                .task {
-                    let model = document.composer.model
-                    kernel.preloadPipeline(model)
-                }
-            PromptSettingsView(prompt: $document.composer)
+            let group = Group {
+                PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
+                    .task {
+                        let model = document.composer.model
+                        kernel.preloadPipeline(model)
+                    }
+                PromptSettingsView(prompt: $document.composer)
+            }
+
+            if forceShow || assets.hasModel {
+                group
+            } else if !assets.loaded {
+                group.hidden()
+            } else {
+                Text("Download models").font(.title3).frame(alignment: .leading)
+                AppSettingsView()
+            }
         }.padding().background(.regularMaterial)
     }
 
@@ -31,7 +44,7 @@ struct PromptComposer: View {
         let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count).onSuccess { images in
             saveResults(promptId: prompt.id, images: images)
         }
-        
+
         print("Start job \(job.id) for promtp \(job.prompt.id) <==> \(prompt.id)")
     }
 

@@ -40,9 +40,9 @@ extension GaussPromptId: Transferable {
 enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvertible {
     static var Default: GaussModel = .sd1_5
     static var allCases: [GaussModel] = [
+        .sd1_5,
         .sd2_0,
         .sd1_4,
-        .sd1_5,
     ]
     
     case sd2_0
@@ -54,6 +54,17 @@ enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvert
         case .sd1_5: return "Stable Diffusion 1.5"
         case .sd1_4: return "Stable Diffusion 1.4"
         case .sd2_0: return "Stable Diffusion 2.0"
+        }
+    }
+    
+    var fileSystemName: String {
+        switch self {
+        case .sd1_4:
+            return "sd1.4"
+        case .sd1_5:
+            return "sd1.5"
+        case .sd2_0:
+            return "sd2"
         }
     }
 }

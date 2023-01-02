@@ -38,15 +38,7 @@ struct ApplicationSupportDir {
     }
     
     func modelURL(_ model: GaussModel) -> URL {
-        let directory: String = {
-            switch model {
-            case .sd1_4: return "sd1.4"
-            case .sd2_0: return "sd2.0"
-            case .sd1_5: return "sd1.5"
-            }
-        }()
-        
-        return modelsURL.appendingPathComponent(directory)
+        return modelsURL.appendingPathComponent(model.fileSystemName)
     }
 }
 
@@ -136,13 +128,25 @@ protocol BuildRule {
 }
 
 protocol CompositeBuildRule: BuildRule {
-    var outputs: [URL] { get }
-    var inputs: [URL] { get }
+    var label: String { get }
     var rules: [BuildRule] { get }
 }
 
+struct BuildRuleList: CompositeBuildRule {
+    var label: String
+    var rules: [BuildRule]
+    var inputs: [URL] {
+        rules.flatMap { $0.inputs }
+    }
+    
+    var outputs: [URL] {
+        rules.flatMap { $0.outputs }
+    }
+}
+
 protocol TaskableBuildRule: BuildRule {
-    func createTask() -> any ObservableTaskProtocol
+    associatedtype BuildTask: ObservableTaskProtocol
+    func createTask() -> BuildTask
 }
 
 extension URL {
@@ -296,7 +300,7 @@ extension DownloadRule: TaskableBuildRule {
         [remoteURL]
     }
     
-    func createTask() -> any ObservableTaskProtocol {
+    func createTask() -> some ObservableTaskProtocol {
         return DownloadTask(self)
     }
 }
@@ -367,7 +371,7 @@ extension ConcatFilesRule: TaskableBuildRule {
         concat
     }
     
-    func createTask() -> any ObservableTaskProtocol {
+    func createTask() -> some ObservableTaskProtocol {
         return ConcatFilesTask(self)
     }
 }
@@ -381,7 +385,7 @@ struct UnarchiveFilesRule {
 extension UnarchiveFilesRule: TaskableBuildRule {
     var inputs: [URL] { [archiveFile] }
     var outputs: [URL] { [destinationDirectory] }
-    func createTask() -> any ObservableTaskProtocol {
+    func createTask() -> some ObservableTaskProtocol {
         return UnarchiveFilesTask(self)
     }
 }
@@ -513,6 +517,10 @@ struct DownloadModelRule {
 
 // TODO:
 extension DownloadModelRule: CompositeBuildRule {
+    var label: String {
+        "Install \(model.description)"
+    }
+    
     var inputs: [URL] {
         downloadJobs.map { $0.remoteURL }
     }
@@ -534,6 +542,10 @@ struct DownloadAllModelsRule {
 }
 
 extension DownloadAllModelsRule: CompositeBuildRule {
+    var label: String {
+        "Install all models"
+    }
+    
     var rules: [BuildRule] {
         downloadRules.map { $0 }
     }
@@ -547,14 +559,14 @@ extension DownloadAllModelsRule: CompositeBuildRule {
     }
 }
 
-enum RuleScheduler {
+enum RuleExecutor {
     static func executeInOrder(_ rules: [BuildRule]) async throws {
         for rule in rules {
             print("RuleScheduler.executeInOrder: rule", rule)
             switch rule {
             case let composite as CompositeBuildRule:
                 try await executeInOrder(composite.rules)
-            case let taskable as TaskableBuildRule:
+            case let taskable as any TaskableBuildRule:
                 if try taskable.outputsOutOfDate() {
                     let task = taskable.createTask()
                     task.resume()
@@ -563,6 +575,220 @@ enum RuleScheduler {
             default:
                 throw AssetDownloadError.unschedulableRule(rule)
             }
+        }
+    }
+}
+
+protocol RuleScheduler {
+    func schedule(rule: BuildRule) -> any ObservableTaskProtocol
+}
+
+class AssetManager: ObservableObject, ModelLocator {
+    static let inst = AssetManager()
+    
+    @Published var cachedModelLocations = [GaussModel: URL]()
+    @Published var loaded = false
+    
+    private let modelLocations = TryEachModelLocator(locators: [
+        ApplicationSupportModelLocator()
+//        BundleResourceModelLocator(),
+//        DeveloperOnlyModelLocator()
+    ])
+    
+    var hasModel: Bool {
+        return firstModel != nil
+    }
+    
+    var firstModel: GaussModel? {
+        return GaussModel.allCases.first { locateModel(model: $0) != nil }
+    }
+    
+    var defaultModel: GaussModel {
+        return firstModel ?? GaussModel.Default
+    }
+
+    func locateModel(model: GaussModel) -> URL? {
+        return cachedModelLocations[model]
+    }
+    
+    @MainActor
+    func refreshAvailableModels() async {
+        for model in GaussModel.allCases {
+            if let url = await Task(operation: { modelLocations.locateModel(model: model) }).value {
+                cachedModelLocations[model] = url
+            } else {
+                cachedModelLocations.removeValue(forKey: model)
+            }
+        }
+        loaded = true
+    }
+}
+
+protocol ModelLocator {
+    func locateModel(model: GaussModel) -> URL?
+}
+
+struct BundleResourceModelLocator: ModelLocator {
+    func locateModel(model: GaussModel) -> URL? {
+        return Bundle.main.url(forResource: model.fileSystemName, withExtension: nil)
+    }
+}
+
+struct ApplicationSupportModelLocator: ModelLocator {
+    func locateModel(model: GaussModel) -> URL? {
+        let url = ApplicationSupportDir.inst.modelURL(model)
+        if FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return nil
+    }
+}
+
+struct DeveloperOnlyModelLocator: ModelLocator {
+    func locateModel(model: GaussModel) -> URL? {
+        let thisFileURL = URL(filePath: #file)
+        let rootDirectory = thisFileURL.deletingLastPathComponent().deletingLastPathComponent()
+        let compiledModels = rootDirectory.appendingPathComponent("compiled-models")
+        let url = compiledModels.appendingPathComponent(model.fileSystemName)
+        if FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        return nil
+    }
+}
+
+struct TryEachModelLocator: ModelLocator {
+    let locators: [ModelLocator]
+    
+    func locateModel(model: GaussModel) -> URL? {
+        for locator in locators {
+            if let url = locator.locateModel(model: model) {
+                return url
+            }
+        }
+        return nil
+    }
+}
+
+extension Dictionary where Key: Any, Value: Any {
+    mutating func upsert(forKey: Key, value: Value, updater: (inout Value) -> Value) {
+        if var existing = self[forKey] {
+            self[forKey] = updater(&existing)
+        } else {
+            self[forKey] = value
+        }
+    }
+}
+
+struct BuildTaskGraph {
+    // TODO: we may need weak references in here
+    typealias BuildRuleDictionary = [URL: [any TaskableBuildRule]]
+    
+    var tasks = [any TaskableBuildRule]()
+    var byInput = BuildRuleDictionary()
+    var byOutput = BuildRuleDictionary()
+    
+    var want = Set<URL>()
+    var building = Set<URL>()
+    var have = Set<URL>()
+    
+    var targets: [URL] {
+        want.filter { !building.contains($0) && !have.contains($0) }
+    }
+    
+    mutating func add(rule: any TaskableBuildRule) {
+        tasks.append(rule)
+        
+        for input in rule.inputs {
+            byInput.upsert(forKey: input, value: [rule]) { $0.append(rule); return $0 }
+        }
+        
+        for output in rule.outputs {
+            byOutput.upsert(forKey: output, value: [rule]) { $0.append(rule); return $0 }
+        }
+    }
+    
+    /// Call with the stuff you want to build.
+    /// Returns the list of ruels to build next; they can all be built concurrently.
+    mutating func addTargets(outputs: [URL]) {
+        outputs.forEach { want.insert($0) }
+    }
+    
+    /// Call when a artifact is produced, or if you have some artifacts initially.
+    /// Returns the list of rules to build next; they can all be built concurrently.
+    /// TODO: perhaps this should be dependency injected instead as `checkIfInputSatisfied(rule, URL) throws -> Bool`? That way we only check inputs on demand...
+    mutating func addSatisfied(resources: [URL]) {
+        resources.forEach { have.insert($0) }
+        resources.forEach { building.remove($0) }
+    }
+    
+    mutating func didFinishBuilding(rules: [any TaskableBuildRule]) {
+        addSatisfied(resources: rules.flatMap { $0.outputs })
+    }
+    
+    /// Call when a rule is scheduled to be built.
+    mutating func didStartBuilding(rules: [any TaskableBuildRule]) {
+        for rule in rules {
+            rule.outputs.forEach { building.insert($0) }
+            rule.outputs.forEach { have.remove($0) }
+        }
+    }
+    
+    /// Returns the rules that can currently be built.
+    /// You can build all such rules concurrently.
+    /// Once you start building rules, be sure to call `didStartBuilding(rules: buildableRules)`
+    /// so the system doesn't return those rules anymore.
+    func getBuildableRules() -> [any TaskableBuildRule] {
+        // Inspect our want and our currently in-progress builds, then suggest
+        // which builds we should start
+        var results = [any TaskableBuildRule]()
+        var toVisitQueue = [any TaskableBuildRule]()
+        var hasVisitedSet = Set<URL>()
+        
+        // Start from the rules that produce the targets we need
+        toVisitQueue.append(contentsOf: rulesForTargets(targets: Array(want)))
+        
+        while !toVisitQueue.isEmpty {
+            let rule = toVisitQueue.removeFirst()
+            
+            // Prevent circular
+            if rule.outputs.allSatisfy({ hasVisitedSet.contains($0) }) {
+                continue
+            }
+            rule.outputs.forEach { hasVisitedSet.insert($0) }
+            
+            // If we can start building the rule, add it to return set.
+            if canBuild(rule: rule) {
+                results.append(rule)
+                continue
+            }
+            
+            // Otherwise, check to see if we can build its dependencies
+            toVisitQueue.append(contentsOf: rulesForTargets(targets: rule.inputs))
+        }
+        
+        return results
+    }
+    
+    // TODO: finish this logic
+    func canBuild(rule: BuildRule) -> Bool {
+        if !rule.inputs.allSatisfy({ have.contains($0) }) {
+            // Must have all inputs to build.
+            return false
+        }
+        
+        if !rule.outputs.allSatisfy({ !building.contains($0) }) {
+            // Must not be building any outputs already.
+            return false
+        }
+        
+        // TODO: finish this logic
+        return try! rule.outputsOutOfDate()
+    }
+    
+    func rulesForTargets(targets: [URL]) -> [any TaskableBuildRule] {
+        return targets.compactMap { target in
+            byOutput[target]?.first
         }
     }
 }

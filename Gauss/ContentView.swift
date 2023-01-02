@@ -40,6 +40,11 @@ struct ContentView: View {
                 VStack {
                     Spacer()
                     PromptComposer(document: $document, submitAction: { withAnimation { proxy.scrollTo(bottomViewId) } })
+                        .onAppear {
+                            Task {
+                                await AssetManager.inst.refreshAvailableModels()
+                            }
+                        }
                 }
             
                 VStack {
