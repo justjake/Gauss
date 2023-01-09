@@ -189,6 +189,11 @@ extension URL {
         let attributes = try? FileManager.default.attributesOfItem(atPath: path)
         return attributes?[FileAttributeKey.modificationDate] as? Date
     }
+    
+    func touch() throws {
+        let modificationDate = Date()
+        try FileManager.default.setAttributes([FileAttributeKey.modificationDate: Date()], ofItemAtPath: path)
+    }
 }
 
 extension BuildRule {
@@ -197,10 +202,12 @@ extension BuildRule {
         for output in outputs {
             // Non-file outputs are always dirty.
             if !output.isFileURL {
+                print("outputsOutOfDate: not a file URL, assuming out of date", output)
                 return true
             }
             
             guard let mtime = output.mtime else {
+                print("outputsOutOfDate: cannot fetch mtime, assuming out of date", output)
                 return true
             }
             outputTimestamps[output] = mtime
@@ -219,6 +226,7 @@ extension BuildRule {
             
             if let mtime = input.mtime {
                 if mtime > maxOutputTimestamp {
+                    print("mtime of input \(mtime) > max mtime of output \(maxOutputTimestamp), is out of date", input)
                     return true
                 }
             }
@@ -512,7 +520,11 @@ class UnarchiveFilesTask: ObservableTask<Void, Void> {
         let tempUrl = try unarchiveToTempdir()
         
         try FileManager.default.createDirectory(at: rule.destinationDirectory.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: rule.destinationDirectory.path) {
+            try FileManager.default.removeItem(at: rule.destinationDirectory)
+        }
         try FileManager.default.moveItem(at: tempUrl, to: rule.destinationDirectory)
+        try rule.destinationDirectory.touch()
         print("UnarchiveFilesTask: moved \(tempUrl) to \(rule.destinationDirectory)")
     }
 }
@@ -595,25 +607,25 @@ extension DownloadAllModelsRule: CompositeBuildRule {
     }
 }
 
-enum RuleExecutor {
-    static func executeInOrder(_ rules: [BuildRule]) async throws {
-        for rule in rules {
-            print("RuleScheduler.executeInOrder: rule", rule)
-            switch rule {
-            case let composite as CompositeBuildRule:
-                try await executeInOrder(composite.rules)
-            case let taskable as any TaskableBuildRule:
-                if taskable.outputsOutOfDate() {
-                    let task = taskable.createTask()
-                    task.resume()
-                    try await task.waitSuccess()
-                }
-            default:
-                throw AssetDownloadError.unschedulableRule(rule)
-            }
-        }
-    }
-}
+// enum RuleExecutor {
+//    static func executeInOrder(_ rules: [BuildRule]) async throws {
+//        for rule in rules {
+//            print("RuleScheduler.executeInOrder: rule", rule)
+//            switch rule {
+//            case let composite as CompositeBuildRule:
+//                try await executeInOrder(composite.rules)
+//            case let taskable as any TaskableBuildRule:
+//                if taskable.outputsOutOfDate() {
+//                    let task = taskable.createTask()
+//                    task.resume()
+//                    try await task.waitSuccess()
+//                }
+//            default:
+//                throw AssetDownloadError.unschedulableRule(rule)
+//            }
+//        }
+//    }
+// }
 
 protocol RuleScheduler {
     func schedule(rule: BuildRule) -> any ObservableTaskProtocol
@@ -633,6 +645,10 @@ class AssetManager: ObservableObject, ModelLocator {
     
     var hasModel: Bool {
         return firstModel != nil
+    }
+    
+    var hasAllModels: Bool {
+        return cachedModelLocations.count == GaussModel.allCases.count
     }
     
     var firstModel: GaussModel? {
@@ -655,6 +671,7 @@ class AssetManager: ObservableObject, ModelLocator {
             } else {
                 cachedModelLocations.removeValue(forKey: model)
             }
+            print("refreshAvailableModels:", cachedModelLocations)
         }
         loaded = true
     }
@@ -779,7 +796,7 @@ actor BuildTaskGraph {
     }
     
     /// Call when a rule is scheduled to be built.
-    func didStartBuilding(rules: [any TaskableBuildRule]) {
+    func willStartBuilding(rules: [any TaskableBuildRule]) {
         for rule in rules {
             rule.outputs.forEach { building.insert($0) }
             rule.outputs.forEach { have.remove($0) }
@@ -826,6 +843,12 @@ actor BuildTaskGraph {
                 continue
             }
             rule.outputs.forEach { hasVisitedSet.insert($0) }
+            
+            // If we already satisfied the output, skip.
+            if rule.outputs.allSatisfy({ isSatisfied(input: $0) }) {
+                addSatisfied(resources: rule.outputs)
+                continue
+            }
             
             // If we can start building the rule, add it to return set.
             if readyToBuild(rule: rule) {

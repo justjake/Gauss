@@ -86,7 +86,7 @@ struct AppSettingsView: View {
         VStack {
             List {
                 ForEach(GaussModel.allCases, id: \.self) { model in
-                    ModelInstallView(model: model, assetHost: assetHost)
+                    ModelInstallView(model: model, assetHost: assetHost, scheduler: GaussKernel.inst)
                 }
             }
 
@@ -109,7 +109,9 @@ struct AppSettingsView: View {
             Button("Download and install models") {
                 Task {
                     let rule = DownloadAllModelsRule(assetHost: assetHost)
-                    try! await RuleExecutor.executeInOrder(rule.rules)
+                    let job = GaussKernel.inst.schedule(rule: rule)
+                    await job.wait()
+                    await AssetManager.inst.refreshAvailableModels()
                 }
             }.padding(.bottom)
         }
@@ -196,16 +198,28 @@ struct ModelInstallView: View {
 
             if scheduler != nil {
                 if hasModel {
-                    Button("Reinstall") { install() }
+                    Button("Reinstall") { Task { await reinstall() } }
                 } else {
-                    Button("Install") { install() }
+                    Button("Install") { Task { await install() } }
                 }
             }
         }
     }
 
-    func install() {
-        
+    func reinstall() async {
+        do {
+            try downloadRule.removeOutputs()
+            try downloadRule.removeIntermediateOutputs()
+            await assetManager.refreshAvailableModels()
+        } catch {
+            print("Re-install error:", error)
+        }
+        await install()
+    }
+
+    func install() async {
+        await scheduler?.schedule(rule: downloadRule).wait()
+        await assetManager.refreshAvailableModels()
     }
 }
 

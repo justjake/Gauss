@@ -87,6 +87,8 @@ actor ModelRepository {
 }
 
 class GaussKernel: ObservableObject, RuleScheduler {
+    static var inst = GaussKernel()
+    
     @MainActor @Published var jobs = ObservableTaskDictionary()
     @MainActor @Published var loadedModels = Set<GaussModel>()
     @MainActor var ready: Bool {
@@ -236,37 +238,46 @@ class GaussKernel: ObservableObject, RuleScheduler {
     func schedule(rule: BuildRule) -> any ObservableTaskProtocol {
         switch rule {
         case let composite as CompositeBuildRule:
-            let subrules = flattenRule(rule: composite)
-            return ObservableTask<Void, Void>(composite.label) { graphJob in
-                let graph = BuildTaskGraph()
-                await graph.configure(rules: subrules, outputs: composite.outputs)
+            let task = ObservableTask<Void, Void>(composite.label) { graphJob in
+                let graph = composite.graph()
                 await withTaskGroup(of: Void.self) { group in
-                    while await !graph.targets.isEmpty {
+                    var build = 0
+                    var loop = 0
+                    var targets = await graph.targets
+                    while !targets.isEmpty {
                         var buildable = await graph.getBuildableRules()
-                        await graph.didStartBuilding(rules: buildable)
+                        print("scheduler \(loop) targets:", targets)
+                        print("scheduler \(loop) willStartBuilding:", buildable)
+                        await graph.willStartBuilding(rules: buildable)
                         for buildableRule in buildable {
+                            build += 1
+                            let id = "\(loop)-\(build)"
                             group.addTask {
                                 if Task.isCancelled {
                                     return
                                 }
+                                print("scheduler building \(id):", buildableRule)
                                 let observable = self.schedule(rule: buildableRule)
                                 try! await graphJob.waitFor(observable)
                                 if await observable.anyState.isCompelte {
+                                    print("scheduler didFinishBuilding \(id):", buildableRule)
                                     await graph.didFinishBuilding(rules: [buildableRule])
                                 }
                             }
                         }
                         await group.next()
+                        loop += 1
+                        targets = await graph.targets
                     }
                 }
             }
+            return watchJob(task.resume())
         // TODO: scheudle task to run
         case let taskable as any TaskableBuildRule:
-            var task = taskable.createTask()
+            let task = taskable.createTask()
             return watchJob(task.resume())
         default:
             fatalError("Not schedulable")
         }
     }
-    
 }

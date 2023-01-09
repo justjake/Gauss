@@ -133,11 +133,11 @@ class FulfillableTask<Success: Sendable> {
         @discardableResult
         func fulfill(result: Result<Success, Failure>) -> Bool {
             guard self.result == nil else {
-                print("Waiter: already fulfilled:", self.result as Any, "discarded:", result)
+//                print("Waiter: already fulfilled:", self.result as Any, "discarded:", result)
                 return false
             }
             
-            print("Waiter: fulfilled for first time", self)
+//            print("Waiter: fulfilled for first time", self)
             self.result = result
             
             for cont in pending {
@@ -149,10 +149,10 @@ class FulfillableTask<Success: Sendable> {
         
         func addContinuation(_ continuation: Continuation) {
             if let result = result {
-                print("Waiter: addContinuation: already resolved, resuming...")
+//                print("Waiter: addContinuation: already resolved, resuming...")
                 continuation.resume(returning: result)
             } else {
-                print("Waiter: append continuation")
+//                print("Waiter: append continuation")
                 pending.append(continuation)
             }
         }
@@ -166,10 +166,10 @@ class FulfillableTask<Success: Sendable> {
             let result = await withCheckedContinuation { continuation in
                 Task {
                     await waiter.addContinuation(continuation)
-                    print("FulfillableTask: added continuation")
+//                    print("FulfillableTask: added continuation")
                 }
             }
-            print("FulfillableTask: resolving")
+//            print("FulfillableTask: resolving")
             return try result.get()
         }
     }()

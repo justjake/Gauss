@@ -53,7 +53,15 @@ enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvert
         switch self {
         case .sd1_5: return "Stable Diffusion 1.5"
         case .sd1_4: return "Stable Diffusion 1.4"
-        case .sd2_0: return "Stable Diffusion 2.0"
+        case .sd2_0: return "Stable Diffusion 2.0 Base"
+        }
+    }
+    
+    var shortDescription: String {
+        switch self {
+        case .sd1_5: return "SD 1.5"
+        case .sd1_4: return "SD 1.4"
+        case .sd2_0: return "SD 2.0"
         }
     }
     
