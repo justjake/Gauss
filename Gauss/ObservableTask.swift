@@ -27,6 +27,13 @@ enum ObservableTaskState<P, R> {
         }
     }
     
+    var isCompelte: Bool {
+        if case .complete = self {
+            return true
+        }
+        return false
+    }
+    
     var running: Bool {
         switch self {
         case .running: return true
@@ -360,7 +367,15 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
         }
     }
     
+    func dependOn(_ other: any ObservableTaskProtocol) async {
+        await MainActor.run { waitingFor.insert(job: other) }
+        progress.totalUnitCount += 1
+        // TODO: figure out how we want to do tracking
+        //        progress.addChild(other.progress, withPendingUnitCount: 1)
+    }
+    
     func waitForValue<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
+        await dependOn(other)
         try await waitFor(other)
         return try await other.task.result.get()
     }
@@ -368,8 +383,6 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     func waitFor(_ other: any ObservableTaskProtocol) async throws {
         await MainActor.run { waitingFor.insert(job: other) }
         progress.totalUnitCount += 1
-        // TODO: figure out how we want to do tracking
-        //        progress.addChild(other.progress, withPendingUnitCount: 1)
         await other.wait()
         await MainActor.run { waitingFor.remove(job: other) }
         try await other.waitSuccess()

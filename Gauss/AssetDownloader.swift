@@ -132,7 +132,31 @@ protocol CompositeBuildRule: BuildRule {
     var rules: [BuildRule] { get }
 }
 
-struct BuildRuleList: CompositeBuildRule {
+extension [BuildRule] {
+    var flattened: [any TaskableBuildRule] {
+        var rules = [any TaskableBuildRule]()
+        for rule in self {
+            switch rule {
+            case let composite as CompositeBuildRule:
+                let subtasks = composite.rules.flattened
+                rules.append(contentsOf: subtasks)
+            case let taskable as any TaskableBuildRule:
+                rules.append(taskable)
+            default:
+                continue
+            }
+        }
+        return rules
+    }
+}
+
+extension CompositeBuildRule {
+    func graph() -> BuildTaskGraph {
+        BuildTaskGraph(rules: rules.flattened, outputs: outputs)
+    }
+}
+
+public struct BuildRuleList: CompositeBuildRule {
     var label: String
     var rules: [BuildRule]
     var inputs: [URL] {
@@ -149,6 +173,17 @@ protocol TaskableBuildRule: BuildRule {
     func createTask() -> BuildTask
 }
 
+struct TaskBuildRule: TaskableBuildRule {
+    var inputs: [URL]
+    var outputs: [URL]
+    var label: String
+    var build: (ObservableTask<Void, Void>) async throws -> Void
+    
+    func createTask() -> some ObservableTaskProtocol & AnyObject {
+        return ObservableTask(label, build)
+    }
+}
+
 extension URL {
     var mtime: Date? {
         let attributes = try? FileManager.default.attributesOfItem(atPath: path)
@@ -157,7 +192,7 @@ extension URL {
 }
 
 extension BuildRule {
-    func outputsOutOfDate() throws -> Bool {
+    func outputsOutOfDate() -> Bool {
         var outputTimestamps = [URL: Date]()
         for output in outputs {
             // Non-file outputs are always dirty.
@@ -219,6 +254,7 @@ enum AssetDownloadError: Error {
     case cannotDecodeArchive(FilePath)
     case cannotStartExtraction(archive: FilePath, destination: FilePath)
     case unschedulableRule(BuildRule)
+    case cannotMakeProgress(String)
 }
 
 // TODO: implement https://developer.apple.com/documentation/foundation/url_loading_system/downloading_files_in_the_background
@@ -567,7 +603,7 @@ enum RuleExecutor {
             case let composite as CompositeBuildRule:
                 try await executeInOrder(composite.rules)
             case let taskable as any TaskableBuildRule:
-                if try taskable.outputsOutOfDate() {
+                if taskable.outputsOutOfDate() {
                     let task = taskable.createTask()
                     task.resume()
                     try await task.waitSuccess()
@@ -680,23 +716,40 @@ extension Dictionary where Key: Any, Value: Any {
     }
 }
 
-struct BuildTaskGraph {
+actor BuildTaskGraph {
     // TODO: we may need weak references in here
     typealias BuildRuleDictionary = [URL: [any TaskableBuildRule]]
+    
+    /// Check that output `URL` is up-to-date for rule BuildRule.
+//    var isSatisfied: (_ output: URL, _ ofBuildRule: BuildRule) throws -> Bool
     
     var tasks = [any TaskableBuildRule]()
     var byInput = BuildRuleDictionary()
     var byOutput = BuildRuleDictionary()
     
-    var want = Set<URL>()
-    var building = Set<URL>()
-    var have = Set<URL>()
+    private var want = Set<URL>()
+    private var building = Set<URL>()
+    private var have = Set<URL>()
     
     var targets: [URL] {
         want.filter { !building.contains($0) && !have.contains($0) }
     }
     
-    mutating func add(rule: any TaskableBuildRule) {
+    init(
+        rules: [any TaskableBuildRule],
+        outputs: [URL]
+    ) {
+        add(rules: rules)
+        add(targets: outputs)
+    }
+    
+    func add(rules: [any TaskableBuildRule]) {
+        for rule in rules {
+            add(rule: rule)
+        }
+    }
+    
+    func add(rule: any TaskableBuildRule) {
         tasks.append(rule)
         
         for input in rule.inputs {
@@ -710,28 +763,45 @@ struct BuildTaskGraph {
     
     /// Call with the stuff you want to build.
     /// Returns the list of ruels to build next; they can all be built concurrently.
-    mutating func addTargets(outputs: [URL]) {
-        outputs.forEach { want.insert($0) }
+    func add(targets: [URL]) {
+        targets.forEach { want.insert($0) }
     }
     
-    /// Call when a artifact is produced, or if you have some artifacts initially.
+    /// Call when a artifact is produced, or if you have some artifacts initially that are know to be up-to-date.
     /// Returns the list of rules to build next; they can all be built concurrently.
-    /// TODO: perhaps this should be dependency injected instead as `checkIfInputSatisfied(rule, URL) throws -> Bool`? That way we only check inputs on demand...
-    mutating func addSatisfied(resources: [URL]) {
+    func addSatisfied(resources: [URL]) {
         resources.forEach { have.insert($0) }
         resources.forEach { building.remove($0) }
     }
     
-    mutating func didFinishBuilding(rules: [any TaskableBuildRule]) {
+    func didFinishBuilding(rules: [any TaskableBuildRule]) {
         addSatisfied(resources: rules.flatMap { $0.outputs })
     }
     
     /// Call when a rule is scheduled to be built.
-    mutating func didStartBuilding(rules: [any TaskableBuildRule]) {
+    func didStartBuilding(rules: [any TaskableBuildRule]) {
         for rule in rules {
             rule.outputs.forEach { building.insert($0) }
             rule.outputs.forEach { have.remove($0) }
         }
+    }
+    
+    func isSatisfied(input: URL) -> Bool {
+        // Cached or recently built.
+        if have.contains(input) {
+            return true
+        }
+        
+        // None-file inputs are always considered available.
+        if !input.isFileURL {
+            return true
+        }
+        
+        if let rule = byOutput[input]?.first {
+            return !rule.outputsOutOfDate()
+        }
+        
+        return FileManager.default.fileExists(atPath: input.path)
     }
     
     /// Returns the rules that can currently be built.
@@ -758,7 +828,7 @@ struct BuildTaskGraph {
             rule.outputs.forEach { hasVisitedSet.insert($0) }
             
             // If we can start building the rule, add it to return set.
-            if canBuild(rule: rule) {
+            if readyToBuild(rule: rule) {
                 results.append(rule)
                 continue
             }
@@ -770,9 +840,8 @@ struct BuildTaskGraph {
         return results
     }
     
-    // TODO: finish this logic
-    func canBuild(rule: BuildRule) -> Bool {
-        if !rule.inputs.allSatisfy({ have.contains($0) }) {
+    func readyToBuild(rule: BuildRule) -> Bool {
+        if !rule.inputs.allSatisfy({ isSatisfied(input: $0) }) {
             // Must have all inputs to build.
             return false
         }
@@ -782,8 +851,7 @@ struct BuildTaskGraph {
             return false
         }
         
-        // TODO: finish this logic
-        return try! rule.outputsOutOfDate()
+        return rule.outputsOutOfDate()
     }
     
     func rulesForTargets(targets: [URL]) -> [any TaskableBuildRule] {

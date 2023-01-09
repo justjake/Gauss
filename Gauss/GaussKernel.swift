@@ -237,37 +237,36 @@ class GaussKernel: ObservableObject, RuleScheduler {
         switch rule {
         case let composite as CompositeBuildRule:
             let subrules = flattenRule(rule: composite)
-            return ObservableTask<Void, Void>(composite.label) { job in
-                for rule in subrules {
-                    if try rule.outputsOutOfDate() {
-                        let task = rule.createTask()
-                        self.watchJob(task).resume()
-                        try await job.waitFor(task)
+            return ObservableTask<Void, Void>(composite.label) { graphJob in
+                let graph = BuildTaskGraph()
+                await graph.configure(rules: subrules, outputs: composite.outputs)
+                await withTaskGroup(of: Void.self) { group in
+                    while await !graph.targets.isEmpty {
+                        var buildable = await graph.getBuildableRules()
+                        await graph.didStartBuilding(rules: buildable)
+                        for buildableRule in buildable {
+                            group.addTask {
+                                if Task.isCancelled {
+                                    return
+                                }
+                                let observable = self.schedule(rule: buildableRule)
+                                try! await graphJob.waitFor(observable)
+                                if await observable.anyState.isCompelte {
+                                    await graph.didFinishBuilding(rules: [buildableRule])
+                                }
+                            }
+                        }
+                        await group.next()
                     }
                 }
             }
+        // TODO: scheudle task to run
         case let taskable as any TaskableBuildRule:
-            let label = taskable.createTask().label
-            let composite = BuildRuleList(label: label, rules: [taskable])
-            return schedule(rule: composite)
+            var task = taskable.createTask()
+            return watchJob(task.resume())
         default:
             fatalError("Not schedulable")
         }
     }
     
-    private func flattenRule(rule: CompositeBuildRule) -> [any TaskableBuildRule] {
-        var rules = [any TaskableBuildRule]()
-        for rule in rule.rules {
-            switch rule {
-            case let composite as CompositeBuildRule:
-                let subtasks = flattenRule(rule: composite)
-                rules.append(contentsOf: subtasks)
-            case let taskable as any TaskableBuildRule:
-                rules.append(taskable)
-            default:
-                continue
-            }
-        }
-        return rules
-    }
 }
