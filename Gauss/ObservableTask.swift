@@ -12,7 +12,7 @@ enum ObservableTaskState<P, R> {
     case pending
     case running
     case progress(P)
-    case complete(R)
+    case success(R)
     case error(Error)
     case cancelled(reason: String)
     
@@ -23,12 +23,12 @@ enum ObservableTaskState<P, R> {
         case .progress(let progress): return .progress(progress)
         case .cancelled(let reason): return .cancelled(reason: reason)
         case .error(let error): return .error(error)
-        case .complete(let result): return .complete(result)
+        case .success(let result): return .success(result)
         }
     }
     
-    var isCompelte: Bool {
-        if case .complete = self {
+    var isSuccess: Bool {
+        if case .success = self {
             return true
         }
         return false
@@ -52,35 +52,10 @@ enum ObservableTaskState<P, R> {
     var finalized: Bool {
         switch self {
         case .error: return true
-        case .complete: return true
+        case .success: return true
         case .cancelled: return true
         default: return false
         }
-    }
-}
-
-@MainActor
-class ObservableTaskTracker: ObservableObject {
-    @Published var jobs = ObservableTaskDictionary()
-        
-    func insert(job: any ObservableTaskProtocol) {
-        jobs[job.id] = job
-    }
-    
-    func remove(job: any ObservableTaskProtocol) {
-        jobs.removeValue(forKey: job.id)
-    }
-        
-    var pending: [UUID: any ObservableTaskProtocol] {
-        self.jobs.filter { _, v in v.anyState.pending }
-    }
-    
-    var running: [UUID: any ObservableTaskProtocol] {
-        self.jobs.filter { _, v in v.anyState.running }
-    }
-    
-    var finalized: [UUID: any ObservableTaskProtocol] {
-        self.jobs.filter { _, v in v.anyState.finalized }
     }
 }
 
@@ -292,9 +267,13 @@ protocol ObservableTaskProtocol: ObservableObject, Identifiable, ProgressReporti
     var label: String { get }
 
     @MainActor var state: ObservableTaskState<SpecialProgress, Success> { get }
+    @MainActor var waitingFor: ObservableTaskDictionary { get }
+    @MainActor var waiters: Set<UUID> { get }
     var task: Task<Success, Error> { get }
     
     @discardableResult func resume() -> Self
+    func didStartWaiting(waiter: any ObservableTaskProtocol) async
+    func didFinishWaiting(waiter: any ObservableTaskProtocol) async
     func wait() async
     func waitSuccess() async throws
     func cancel()
@@ -303,6 +282,10 @@ protocol ObservableTaskProtocol: ObservableObject, Identifiable, ProgressReporti
 extension ObservableTaskProtocol {
     @MainActor var anyState: ObservableTaskState<Any, Any> {
         state.erased
+    }
+    
+    @MainActor var children: [any ObservableTaskProtocol] {
+        Array(waitingFor.values)
     }
 }
 
@@ -318,6 +301,7 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     let fn: Perform
     @MainActor @Published var state: ObservableTaskState<OwnProgress, Success> = .pending
     @MainActor @Published var waitingFor = ObservableTaskDictionary()
+    @MainActor @Published var waiters = Set<UUID>()
     var progress = Progress()
     
     init(_ label: String, _ fn: @escaping Perform) {
@@ -335,7 +319,7 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
             await MainActor.run { self.state = .running }
             let result = try await self.work()
             self.progress.completedUnitCount = self.progress.totalUnitCount
-            await MainActor.run { self.state = .complete(result) }
+            await MainActor.run { self.state = .success(result) }
             return result
         } catch {
             await MainActor.run { self.state = .error(error) }
@@ -369,13 +353,13 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
         await MainActor.run {
             waitingFor.insert(job: other)
         }
+        await other.didStartWaiting(waiter: self)
         progress.totalUnitCount += 1
         // TODO: figure out how we want to do tracking
         //        progress.addChild(other.progress, withPendingUnitCount: 1)
     }
     
     func waitForValue<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
-        await dependOn(other)
         try await waitFor(other)
         return try await other.task.result.get()
     }
@@ -384,7 +368,16 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
         await dependOn(other)
         await other.wait()
         await MainActor.run { waitingFor.remove(job: other) }
+        await other.didFinishWaiting(waiter: self)
         try await other.waitSuccess()
+    }
+    
+    func didStartWaiting(waiter: any ObservableTaskProtocol) async {
+        _ = await MainActor.run { waiters.insert(waiter.id) }
+    }
+    
+    func didFinishWaiting(waiter: any ObservableTaskProtocol) async {
+        _ = await MainActor.run { waiters.remove(waiter.id) }
     }
     
     func cancel(reason: String) {

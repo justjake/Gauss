@@ -55,7 +55,7 @@ struct GaussProgressView: View {
     
     var body: some View {
         switch (job.state) {
-        case .complete(let images):
+        case .success(let images):
             NSImageGridView(
                 images: images
             )

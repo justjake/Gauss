@@ -71,7 +71,7 @@ struct KernelStatusRow<Job: ObservableTaskProtocol>: View {
                     ProgressView().scaledToFit()
                 }
                 cancelButton
-            case .complete:
+            case .success:
                 EmptyView()
             case .cancelled:
                 EmptyView()

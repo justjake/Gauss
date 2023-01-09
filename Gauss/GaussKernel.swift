@@ -259,7 +259,7 @@ class GaussKernel: ObservableObject, RuleScheduler {
                                 print("scheduler building \(id):", buildableRule)
                                 let observable = self.schedule(rule: buildableRule)
                                 try! await graphJob.waitFor(observable)
-                                if await observable.anyState.isCompelte {
+                                if await observable.anyState.isSuccess {
                                     print("scheduler didFinishBuilding \(id):", buildableRule)
                                     await graph.didFinishBuilding(rules: [buildableRule])
                                 }
