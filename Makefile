@@ -34,8 +34,9 @@ SPACE:=$(subst ,, )
 COMMA:=,
 MODEL_SPARSE_CHECKOUT_PATTERN=$(subst $(SPACE),$(COMMA),$(MODEL_SPARSE_CHECKOUT_PATTERNS))
 
-.PHONY: download zips aars clean clean-all
+.PHONY: dev download zips aars clean clean-all
 
+dev: download ApplicationSupport
 download: compiled-models/sd1.4 compiled-models/sd1.5 compiled-models/sd2
 zips: compiled-models/sd1.4.zip.00 compiled-models/sd1.5.zip.00 compiled-models/sd2.zip.00
 aars: compiled-models/sd1.4.aar.00 compiled-models/sd1.5.aar.00 compiled-models/sd2.aar.00
@@ -87,3 +88,6 @@ compiled-models/%.aar: compiled-models/%
 # Split files into 1900 MB chunks
 compiled-models/%.00: compiled-models/%
 	split -b 1900m -d $^ $^.
+
+ApplicationSupport:
+	ln -s $(HOME)/Library/Application\ Support/tl.jake.Gauss/ $@
