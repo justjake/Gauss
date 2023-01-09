@@ -283,35 +283,33 @@ actor AsyncQueue {
     }
 }
 
-protocol ObservableTaskProtocol: ObservableObject, Identifiable {
+protocol ObservableTaskProtocol: ObservableObject, Identifiable, ProgressReporting {
+    associatedtype Success
+    associatedtype SpecialProgress
+    
     var id: UUID { get }
     var createdAt: Date { get }
     var label: String { get }
-    @MainActor var anyState: ObservableTaskState<Any, Any> { get }
+
+    @MainActor var state: ObservableTaskState<SpecialProgress, Success> { get }
+    var task: Task<Success, Error> { get }
+    
     @discardableResult func resume() -> Self
     func wait() async
     func waitSuccess() async throws
     func cancel()
 }
 
-extension ObservableTask: ObservableTaskProtocol {
+extension ObservableTaskProtocol {
     @MainActor var anyState: ObservableTaskState<Any, Any> {
-        return state.erased
-    }
-
-    func wait() async {
-        _ = await task.result
-    }
-    
-    func waitSuccess() async throws {
-        _ = try await task.value
+        state.erased
     }
 }
 
 /// An ObservableTask is a Task-like abstraction that reports its progress via a published property on the main thread.
 /// ObservableTasks are deferred; they begin executing once `observableTask.resume()` is called.
 // TODO: https://developer.apple.com/documentation/foundation/progress#1661050
-class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, ObservableObject, Identifiable, ProgressReporting {
+class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, ObservableObject, Identifiable, ProgressReporting, ObservableTaskProtocol {
     typealias Perform = (ObservableTask<Success, OwnProgress>) async throws -> Success
 
     let id = UUID()
@@ -368,7 +366,9 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     }
     
     func dependOn(_ other: any ObservableTaskProtocol) async {
-        await MainActor.run { waitingFor.insert(job: other) }
+        await MainActor.run {
+            waitingFor.insert(job: other)
+        }
         progress.totalUnitCount += 1
         // TODO: figure out how we want to do tracking
         //        progress.addChild(other.progress, withPendingUnitCount: 1)
@@ -381,8 +381,7 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     }
     
     func waitFor(_ other: any ObservableTaskProtocol) async throws {
-        await MainActor.run { waitingFor.insert(job: other) }
-        progress.totalUnitCount += 1
+        await dependOn(other)
         await other.wait()
         await MainActor.run { waitingFor.remove(job: other) }
         try await other.waitSuccess()
@@ -422,5 +421,13 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
             await MainActor.run { handler(result) }
         }
         return self
+    }
+    
+    func wait() async {
+        _ = await task.result
+    }
+    
+    func waitSuccess() async throws {
+        _ = try await task.value
     }
 }
