@@ -151,8 +151,28 @@ extension [BuildRule] {
 }
 
 extension CompositeBuildRule {
+    var intermediateOutputs: [URL] {
+        let allRules = rules.flattened
+        let outputSet = Set(outputs)
+        return allRules.flatMap { $0.outputs.filter { !outputSet.contains($0) } }
+    }
+    
     func graph() -> BuildTaskGraph {
         BuildTaskGraph(rules: rules.flattened, outputs: outputs)
+    }
+    
+    func cleanRule(
+        intermediateOutputs: Bool,
+        finalOutputs: Bool
+    ) -> CleanRule {
+        var toRemove = [URL]()
+        if intermediateOutputs {
+            toRemove.append(contentsOf: self.intermediateOutputs)
+        }
+        if finalOutputs {
+            toRemove.append(contentsOf: outputs)
+        }
+        return CleanRule(label: "Clean up \"\(label)\"", toRemove: toRemove)
     }
 }
 
@@ -184,6 +204,29 @@ struct TaskBuildRule: TaskableBuildRule {
     }
 }
 
+public struct CleanRule: TaskableBuildRule {
+    var label: String
+    var toRemove: [URL]
+
+    var outputs = [URL]()
+    var inputs = [URL]()
+    
+    func createTask() -> some ObservableTaskProtocol & AnyObject {
+        return ObservableTask<Void, Void>(label) { job in
+            job.progress.totalUnitCount = Int64(toRemove.count)
+            for urlToRemove in toRemove {
+                if FileManager.default.fileExists(atPath: urlToRemove.path(percentEncoded: false)) {
+                    try FileManager.default.removeItem(at: urlToRemove)
+                    print("CleanRule: removed:", urlToRemove)
+                } else {
+                    print("CleanRule: does not exist:", urlToRemove)
+                }
+                job.progress.completedUnitCount += 1
+            }
+        }
+    }
+}
+
 extension URL {
     var mtime: Date? {
         let attributes = try? FileManager.default.attributesOfItem(atPath: path)
@@ -191,7 +234,6 @@ extension URL {
     }
     
     func touch() throws {
-        let modificationDate = Date()
         try FileManager.default.setAttributes([FileAttributeKey.modificationDate: Date()], ofItemAtPath: path)
     }
 }
@@ -551,15 +593,6 @@ struct DownloadModelRule {
     
     var unzipJob: UnarchiveFilesRule {
         UnarchiveFilesRule(archiveFile: concatJob.destination, destinationDirectory: ApplicationSupportDir.inst.modelURL(model))
-    }
-    
-    var intermediateOutputs: [URL] {
-        return downloadJobs.flatMap(\.outputs) + concatJob.outputs
-    }
-    
-    func removeIntermediateOutputs() throws {
-        try downloadJobs.forEach { try $0.removeOutputs() }
-        try concatJob.removeOutputs()
     }
 }
 

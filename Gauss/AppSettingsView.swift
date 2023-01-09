@@ -106,11 +106,15 @@ struct AppSettingsView: View {
                 }
             }.padding(.horizontal)
 
-            Button("Download and install models") {
+            Button("Install all models") {
                 Task {
                     let rule = DownloadAllModelsRule(assetHost: assetHost)
-                    let job = GaussKernel.inst.schedule(rule: rule)
-                    await job.wait()
+                    do {
+                        try await GaussKernel.inst.schedule(rule: rule).waitSuccess()
+                        try await GaussKernel.inst.schedule(rule: rule.cleanRule(intermediateOutputs: true, finalOutputs: false)).waitSuccess()
+                    } catch {
+                        print("Install all error:", error)
+                    }
                     await AssetManager.inst.refreshAvailableModels()
                 }
             }.padding(.bottom)
@@ -198,6 +202,7 @@ struct ModelInstallView: View {
 
             if scheduler != nil {
                 if hasModel {
+                    Button("Remove") { Task { try await uninstall() }}
                     Button("Reinstall") { Task { await reinstall() } }
                 } else {
                     Button("Install") { Task { await install() } }
@@ -206,11 +211,18 @@ struct ModelInstallView: View {
         }
     }
 
+    func uninstall() async throws {
+        do {
+            try await scheduler?.schedule(rule: downloadRule.cleanRule(intermediateOutputs: true, finalOutputs: true)).waitSuccess()
+        } catch {
+            await assetManager.refreshAvailableModels()
+            throw error
+        }
+    }
+
     func reinstall() async {
         do {
-            try downloadRule.removeOutputs()
-            try downloadRule.removeIntermediateOutputs()
-            await assetManager.refreshAvailableModels()
+            try await uninstall()
         } catch {
             print("Re-install error:", error)
         }
@@ -218,7 +230,12 @@ struct ModelInstallView: View {
     }
 
     func install() async {
-        await scheduler?.schedule(rule: downloadRule).wait()
+        do {
+            try await scheduler?.schedule(rule: downloadRule).waitSuccess()
+            try await scheduler?.schedule(rule: downloadRule.cleanRule(intermediateOutputs: true, finalOutputs: false)).waitSuccess()
+        } catch {
+            print("Install error:", error)
+        }
         await assetManager.refreshAvailableModels()
     }
 }
