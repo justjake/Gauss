@@ -414,7 +414,7 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identi
             observable.waitingFor.insert(job: other)
         }
         await other.didStartWaiting(waiter: self)
-        progress.totalUnitCount += 1
+//        progress.totalUnitCount += 1
         // TODO: figure out how we want to do tracking
         //        progress.addChild(other.progress, withPendingUnitCount: 1)
     }

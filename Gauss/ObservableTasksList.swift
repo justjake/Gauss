@@ -86,6 +86,7 @@ struct ObservableTaskView: View {
                 action
             }
             details
+            Divider()
         }
     }
 }

@@ -30,7 +30,7 @@ class GenerateImageJob: ObservableTask<
         self.count = count
         let noun = count > 1 ? "\(count)" : ""
         super.init("Imagine \(noun)", execute)
-        progress.totalUnitCount = Int64(count)
+        progress.totalUnitCount = Int64(prompt.steps)
     }
 }
 
