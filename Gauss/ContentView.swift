@@ -49,7 +49,7 @@ struct ContentView: View {
             
                 VStack {
                     HStack {
-                        KernelStatusView().padding()
+//                        Observa().padding()
                         Spacer()
                     }
                     Spacer()

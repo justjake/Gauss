@@ -59,6 +59,25 @@ enum ObservableTaskState<P, R> {
     }
 }
 
+extension ObservableTaskState<Any, Any> {
+    func cast<Success, OwnProgress>(success: Success.Type, progress: OwnProgress.Type) -> ObservableTaskState<OwnProgress, Success> {
+        switch self {
+        case .progress(let value):
+            return .progress(value as! OwnProgress)
+        case .success(let value):
+            return .success(value as! Success)
+        case .error(let value):
+            return .error(value)
+        case .running:
+            return .running
+        case .pending:
+            return .pending
+        case .cancelled(reason: let reason):
+            return .cancelled(reason: reason)
+        }
+    }
+}
+
 typealias ObservableTaskDictionary = [UUID: any ObservableTaskProtocol]
 
 extension ObservableTaskDictionary {
@@ -258,7 +277,7 @@ actor AsyncQueue {
     }
 }
 
-protocol ObservableTaskProtocol: ObservableObject, Identifiable, ProgressReporting {
+protocol ObservableTaskProtocol: Identifiable, ProgressReporting {
     associatedtype Success
     associatedtype SpecialProgress
     
@@ -266,6 +285,7 @@ protocol ObservableTaskProtocol: ObservableObject, Identifiable, ProgressReporti
     var createdAt: Date { get }
     var label: String { get }
 
+    var observable: ObservableTaskModel { get }
     @MainActor var state: ObservableTaskState<SpecialProgress, Success> { get }
     @MainActor var waitingFor: ObservableTaskDictionary { get }
     @MainActor var waiters: Set<UUID> { get }
@@ -293,24 +313,60 @@ extension ObservableTaskProtocol {
     }
 }
 
+/// Stores all the published elements of an ObservableTask in a type-erased way, eg as `Any`.
+/// We do so to avoid an annoying issue where a `any SomeProtocol` can't be used as an `@ObservedObject`,
+/// and we can't upcast a `GenericClass<T>` to `GenericClass<Any>`.
+///
+/// The hoops we're jumping thorugh are:
+/// 1. An action like `startGeneratingImage()` creates a subclass of ObservableTask with custom success and progress types
+/// 2. We put that task into a dictionary of all jobs
+/// 3. We get all the active jobs
+/// 4. We loop over the jobs and render a view for each one. This view should be able to subscribe to the job via @ObservedObject
+class ObservableTaskModel: ObservableObject, Identifiable {
+    let id: UUID
+    @MainActor @Published var state: ObservableTaskState<Any, Any> = .pending
+    @MainActor @Published var waitingFor = ObservableTaskDictionary()
+    @MainActor @Published var waiters = Set<UUID>()
+    
+    init(id: UUID) {
+        self.id = id
+    }
+}
+
 /// An ObservableTask is a Task-like abstraction that reports its progress via a published property on the main thread.
 /// ObservableTasks are deferred; they begin executing once `observableTask.resume()` is called.
 // TODO: https://developer.apple.com/documentation/foundation/progress#1661050
-class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, ObservableObject, Identifiable, ProgressReporting, ObservableTaskProtocol {
+class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identifiable, ProgressReporting, ObservableTaskProtocol {
     typealias Perform = (ObservableTask<Success, OwnProgress>) async throws -> Success
 
     let id = UUID()
     let createdAt = Date.now
     let label: String
     let fn: Perform
-    @MainActor @Published var state: ObservableTaskState<OwnProgress, Success> = .pending
-    @MainActor @Published var waitingFor = ObservableTaskDictionary()
-    @MainActor @Published var waiters = Set<UUID>()
     var progress = Progress()
+    
+    // Proxy observable tstate to ObservableTaskModel
+    let observable: ObservableTaskModel
+    @MainActor var anyState: ObservableTaskState<Any, Any> {
+        return observable.state
+    }
+    
+    @MainActor var state: ObservableTaskState<OwnProgress, Success> {
+        return observable.state.cast(success: Success.self, progress: OwnProgress.self)
+    }
+    
+    @MainActor var waitingFor: ObservableTaskDictionary {
+        return observable.waitingFor
+    }
+    
+    @MainActor var waiters: Set<UUID> {
+        return observable.waiters
+    }
     
     init(_ label: String, _ fn: @escaping Perform) {
         self.label = label
         self.fn = fn
+        self.observable = ObservableTaskModel(id: id)
     }
     
     lazy var deferred: DeferredTask<Success> = DeferredTask {
@@ -320,13 +376,13 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
         }
 
         do {
-            await MainActor.run { self.state = .running }
+            await MainActor.run { self.observable.state = .running }
             let result = try await self.work()
             self.progress.completedUnitCount = self.progress.totalUnitCount
-            await MainActor.run { self.state = .success(result) }
+            await MainActor.run { self.observable.state = .success(result) }
             return result
         } catch {
-            await MainActor.run { self.state = .error(error) }
+            await MainActor.run { self.observable.state = .error(error) }
             throw error
         }
     }
@@ -348,14 +404,14 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     func reportProgress(_ progress: OwnProgress) async {
         await MainActor.run {
             if self.state.running {
-                self.state = .progress(progress)
+                self.observable.state = .progress(progress)
             }
         }
     }
     
     func dependOn(_ other: any ObservableTaskProtocol) async {
         await MainActor.run {
-            waitingFor.insert(job: other)
+            observable.waitingFor.insert(job: other)
         }
         await other.didStartWaiting(waiter: self)
         progress.totalUnitCount += 1
@@ -371,24 +427,24 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Observ
     func waitFor(_ other: any ObservableTaskProtocol) async throws {
         await dependOn(other)
         await other.wait()
-        await MainActor.run { waitingFor.remove(job: other) }
+        await MainActor.run { observable.waitingFor.remove(job: other) }
         await other.didFinishWaiting(waiter: self)
         try await other.waitSuccess()
     }
     
     func didStartWaiting(waiter: any ObservableTaskProtocol) async {
-        _ = await MainActor.run { waiters.insert(waiter.id) }
+        _ = await MainActor.run { observable.waiters.insert(waiter.id) }
     }
     
     func didFinishWaiting(waiter: any ObservableTaskProtocol) async {
-        _ = await MainActor.run { waiters.remove(waiter.id) }
+        _ = await MainActor.run { observable.waiters.remove(waiter.id) }
     }
     
     func cancel(reason: String) {
         progress.cancel()
         deferred.cancel()
         Task {
-            await MainActor.run { self.state = .cancelled(reason: reason) }
+            await MainActor.run { observable.state = .cancelled(reason: reason) }
         }
     }
     

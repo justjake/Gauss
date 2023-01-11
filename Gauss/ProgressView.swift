@@ -5,12 +5,12 @@
 //  Created by Jake Teton-Landis on 12/3/22.
 //
 
-import SwiftUI
 import StableDiffusion
+import SwiftUI
 
 extension Image {
     func square(_ size: CGFloat = 256) -> some View {
-        return self.resizable().frame(width: size, height: size)
+        return resizable().frame(width: size, height: size)
     }
 }
 
@@ -37,8 +37,8 @@ struct ImageMessageView<Title: View, Content: View>: View {
                     self.label
                     self.content
                 }
-                    .padding()
-                    .background(.thinMaterial, in: GaussStyle.rectSmall)
+                .padding()
+                .background(.thinMaterial, in: GaussStyle.rectSmall)
                 Spacer()
             }
             Spacer()
@@ -47,14 +47,20 @@ struct ImageMessageView<Title: View, Content: View>: View {
 }
 
 struct GaussProgressView: View {
-    @ObservedObject var job: GenerateImageJob
+    var job: GenerateImageJob
+    @ObservedObject var obs: ObservableTaskModel
+    
+    init(job: GenerateImageJob) {
+        self.job = job
+        self.obs = job.observable
+    }
     
     var nilArray: [NSImage?] {
-        return (0..<job.count).map { _ in nil }
+        return (0 ..< job.count).map { _ in nil }
     }
     
     var body: some View {
-        switch (job.state) {
+        switch job.state {
         case .success(let images):
             NSImageGridView(
                 images: images
@@ -68,7 +74,7 @@ struct GaussProgressView: View {
                 )
                 
                 ImageMessageView(
-                    label: ProgressView() {
+                    label: ProgressView {
                         VStack {
                             Button("Cancel") {
                                 job.cancel()
@@ -139,18 +145,17 @@ struct ProgressDetailOverlay: View {
 struct ProgressView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, execute: {_ in [] }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 1, execute: { _ in [] }))
                 .previewDisplayName("Count: 1")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, execute: {_ in [] }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 3, execute: { _ in [] }))
                 .previewDisplayName("Count: 3")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, execute: {_ in [] }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 4, execute: { _ in [] }))
                 .previewDisplayName("Count: 4")
             
-            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, execute: {_ in [] }))
+            GaussProgressView(job: GenerateImageJob(GaussPrompt(), count: 9, execute: { _ in [] }))
                 .previewDisplayName("Count: 9")
-            
         }
     }
 }

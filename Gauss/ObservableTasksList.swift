@@ -20,41 +20,41 @@ struct ObservableTasksList: View {
 
     var body: some View {
         List(topLevelTasks, id: \.id, children: \.children) { task in
-            var downcast = task as! ObservableTask<Any, Any>
-            ObservableTaskView(task: downcast)
+            ObservableTaskView(task: task, observableTask: task.observable)
         }
     }
 }
 
-struct ObservableTaskView<Task: ObservableTaskProtocol>: View {
-    @ObservedObject var task: Task
+struct ObservableTaskView: View {
+    var task: any ObservableTaskProtocol
+    @ObservedObject var observableTask: ObservableTaskModel
     @ObservedObject var kernel: GaussKernel = .inst
 
     var label: some View {
         Text(task.label)
     }
 
+    @ViewBuilder
     var progress: some View {
-        Group {
-            if task.anyState.pending {
-                ProgressView()
-            } else if task.anyState.running {
-                ProgressView(task.progress)
-            } else {
-                Spacer()
-            }
+        if task.anyState.pending {
+            ProgressView()
+        } else if task.anyState.running {
+            ProgressView(task.progress)
+        } else {
+            Spacer()
         }
     }
 
+    @ViewBuilder
     var action: some View {
-        Group {
-            if task.state.pending || task.state.running {
-                cancelButton
-            } else if task.state.finalized {
-                Button("Remove") {
-                    kernel.jobs.remove(job: task)
-                }
+        if observableTask.state.pending || observableTask.state.running {
+            cancelButton
+        } else if observableTask.state.finalized {
+            Button("Remove") {
+                kernel.jobs.remove(job: task)
             }
+        } else {
+            EmptyView()
         }
     }
 
