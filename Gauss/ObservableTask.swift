@@ -284,8 +284,12 @@ extension ObservableTaskProtocol {
         state.erased
     }
     
-    @MainActor var children: [any ObservableTaskProtocol] {
-        Array(waitingFor.values)
+    @MainActor var children: [any ObservableTaskProtocol]? {
+        if waitingFor.values.isEmpty {
+            return nil
+        } else {
+            return Array(waitingFor.values)
+        }
     }
 }
 

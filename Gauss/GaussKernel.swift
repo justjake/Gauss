@@ -245,17 +245,17 @@ class GaussKernel: ObservableObject, RuleScheduler {
                     var loop = 0
                     var targets = await graph.targets
                     while !targets.isEmpty {
-                        var buildable = await graph.getBuildableRules()
+                        if Task.isCancelled {
+                            return
+                        }
+                        let buildable = await graph.getBuildableRules()
                         print("scheduler \(loop) targets:", targets)
                         print("scheduler \(loop) willStartBuilding:", buildable)
                         await graph.willStartBuilding(rules: buildable)
                         for buildableRule in buildable {
                             build += 1
                             let id = "\(loop)-\(build)"
-                            group.addTask {
-                                if Task.isCancelled {
-                                    return
-                                }
+                            _ = group.addTaskUnlessCancelled {
                                 print("scheduler building \(id):", buildableRule)
                                 let observable = self.schedule(rule: buildableRule)
                                 try! await graphJob.waitFor(observable)
