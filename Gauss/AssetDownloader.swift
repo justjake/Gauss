@@ -839,6 +839,11 @@ actor BuildTaskGraph {
     }
     
     func isSatisfied(input: URL) -> Bool {
+        // Still in progress
+        if building.contains(input) {
+            return false
+        }
+        
         // Cached or recently built.
         if have.contains(input) {
             return true
