@@ -320,11 +320,13 @@ class DownloadTask: ObservableTask<URL, Progress>, URLSessionDelegate, URLSessio
     }
     
     private lazy var urlSession: URLSession = {
-        let config = URLSessionConfiguration.background(withIdentifier: "background-\(UUID())")
+        // TODO: background download and resume – currently too much effort to do correctly.
+        // let config = URLSessionConfiguration.background(withIdentifier: "background-\(UUID())")
+        let config = URLSessionConfiguration.default
         // isDiscretionary - means do this slower. We want faster, so we can just start using
         // the data ASAP.
         // config.isDiscretionary = true
-        config.sessionSendsLaunchEvents = true
+        // config.sessionSendsLaunchEvents = true
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
     
