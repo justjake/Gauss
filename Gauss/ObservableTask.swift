@@ -109,10 +109,18 @@ extension ObservableTaskDictionary {
     }
 }
 
-enum QueueJobError: Error {
+enum QueueJobError: Error, LocalizedError {
     case invalidState(String)
-    case dependencyCancelled(String)
-    case noManifest
+    case modelNotFound(GaussModel)
+    
+    var errorDescription: String? {
+        switch self {
+        case .modelNotFound(let model):
+            return "Model \"\(model.description)\" not installed"
+        case .invalidState(let message):
+            return message
+        }
+    }
 }
 
 /// a Task that can be manually fulfilled with a result by external code.

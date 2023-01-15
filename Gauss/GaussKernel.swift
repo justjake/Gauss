@@ -149,9 +149,9 @@ class GaussKernel: ObservableObject, RuleScheduler {
         let config = MLModelConfiguration()
         config.computeUnits = .all
         
-        let url: URL = {
+        let url: URL = try {
             guard let url = resources.locateModel(model: model) else {
-                return URL(filePath: "/MODEL_NOT_FOUND")
+                throw QueueJobError.modelNotFound(model)
             }
             return url
         }()

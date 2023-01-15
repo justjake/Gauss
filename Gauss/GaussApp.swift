@@ -12,17 +12,20 @@ struct GaussApp: App {
     @ObservedObject private var assets = AssetManager.inst
     private let kernel = GaussKernel.inst
 
+    static let MODELS_WINDOW = "models"
+    static let TASKS_WINDOW = "tasks"
+
     var body: some Scene {
         DocumentGroup(newDocument: GaussDocument()) { file in
             ContentView(document: file.$document).environmentObject(kernel)
         }
 
-        Window("Tasks", id: "tasks") {
-            ObservableTasksList()
+        Window("Models", id: GaussApp.MODELS_WINDOW) {
+            SplashView().padding()
         }
 
-        Settings {
-            AppSettingsView()
+        Window("Tasks", id: GaussApp.TASKS_WINDOW) {
+            ObservableTasksList()
         }
     }
 }

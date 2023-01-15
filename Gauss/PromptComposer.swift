@@ -12,17 +12,34 @@ struct PromptComposer: View {
     @State var count = 1
     @EnvironmentObject var kernel: GaussKernel
     @ObservedObject var assets = AssetManager.inst
+    @Environment(\.openWindow) var openWindow
+
     var submitAction: () -> Void
     var forceShow = false
+
+    var currentModel: GaussModel {
+        document.composer.model
+    }
+
+    var hasCurrentModel: Bool {
+        assets.locateModel(model: currentModel) != nil
+    }
 
     var body: some View {
         VStack {
             let group = Group {
-                PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
-                    .task {
-                        let model = document.composer.model
-                        kernel.preloadPipeline(model)
+                if hasCurrentModel {
+                    PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
+                        .task {
+                            let model = document.composer.model
+                            kernel.preloadPipeline(model)
+                        }
+                } else {
+                    HStack {
+                        Text("Model \"\(currentModel.description)\" (\(currentModel.shortDescription)) not available")
+                        showModelsButton
                     }
+                }
                 PromptSettingsView(prompt: $document.composer)
             }
 
@@ -31,10 +48,17 @@ struct PromptComposer: View {
             } else if !assets.loaded {
                 group.hidden()
             } else {
-                Text("Download models").font(.title3).frame(alignment: .leading)
-                AppSettingsView()
+                Text("Download models to start generating images").font(.title2).frame(maxWidth: .infinity)
+                showModelsButton
             }
         }.padding().background(.regularMaterial)
+    }
+
+    @ViewBuilder
+    var showModelsButton: some View {
+        Button("Show models...") {
+            openWindow(id: GaussApp.MODELS_WINDOW)
+        }
     }
 
     func onSubmit() {

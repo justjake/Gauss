@@ -20,6 +20,7 @@
 		C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10A46AE293BD460005CEE6D /* GaussKernel.swift */; };
 		C114658129663A5100E0180A /* BuildTaskGraphTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C114658029663A5100E0180A /* BuildTaskGraphTests.swift */; };
 		C1146583296C23D100E0180A /* ObservableTasksList.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1146582296C23D100E0180A /* ObservableTasksList.swift */; };
+		C114658729715A1A00E0180A /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C114658629715A1A00E0180A /* SplashView.swift */; };
 		C1469899295E60800025DE55 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = C1469898295E60800025DE55 /* StableDiffusion */; };
 		C14698A2295ED0CE0025DE55 /* AppSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14698A0295ED0CE0025DE55 /* AppSettingsView.swift */; };
 		C14698A3295ED0CE0025DE55 /* AssetDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14698A1295ED0CE0025DE55 /* AssetDownloader.swift */; };
@@ -70,6 +71,7 @@
 		C10A46AE293BD460005CEE6D /* GaussKernel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussKernel.swift; sourceTree = "<group>"; };
 		C114658029663A5100E0180A /* BuildTaskGraphTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildTaskGraphTests.swift; sourceTree = "<group>"; };
 		C1146582296C23D100E0180A /* ObservableTasksList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservableTasksList.swift; sourceTree = "<group>"; };
+		C114658629715A1A00E0180A /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
 		C14698A0295ED0CE0025DE55 /* AppSettingsView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppSettingsView.swift; sourceTree = "<group>"; };
 		C14698A1295ED0CE0025DE55 /* AssetDownloader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AssetDownloader.swift; sourceTree = "<group>"; };
 		C161F212293C945F007F518C /* AddPromptButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPromptButton.swift; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				C10A467A293B190F005CEE6D /* GaussApp.swift */,
+				C114658629715A1A00E0180A /* SplashView.swift */,
 				C10A467C293B190F005CEE6D /* GaussDocument.swift */,
 				C10A46AE293BD460005CEE6D /* GaussKernel.swift */,
 				C14698A0295ED0CE0025DE55 /* AppSettingsView.swift */,
@@ -345,6 +348,7 @@
 				C14698A2295ED0CE0025DE55 /* AppSettingsView.swift in Sources */,
 				C10A46AF293BD460005CEE6D /* GaussKernel.swift in Sources */,
 				C10A467F293B190F005CEE6D /* ContentView.swift in Sources */,
+				C114658729715A1A00E0180A /* SplashView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

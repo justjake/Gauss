@@ -62,6 +62,7 @@ class AppSettingsModel: ObservableObject {
 
 struct AppSettingsView: View {
     @ObservedObject var appSettings = AppSettingsModel.inst
+    @Environment(\.openWindow) var openWindow
 
     var assetHost: AssetHost {
         switch appSettings.modelDownloadSource {
@@ -108,6 +109,7 @@ struct AppSettingsView: View {
 
             Button("Install all models") {
                 Task {
+                    openWindow(id: GaussApp.TASKS_WINDOW)
                     let rule = DownloadAllModelsRule(assetHost: assetHost)
                     do {
                         try await GaussKernel.inst.schedule(rule: rule).waitSuccess()
@@ -170,6 +172,8 @@ struct ModelInstallView: View {
         DownloadModelRule(model: model, assetHost: assetHost)
     }
 
+    @Environment(\.openWindow) var openWindow
+
     @ObservedObject var assetManager = AssetManager.inst
     var scheduler: RuleScheduler?
 
@@ -214,6 +218,7 @@ struct ModelInstallView: View {
     func uninstall() async throws {
         do {
             try await scheduler?.schedule(rule: downloadRule.cleanRule(intermediateOutputs: true, finalOutputs: true)).waitSuccess()
+            await assetManager.refreshAvailableModels()
         } catch {
             await assetManager.refreshAvailableModels()
             throw error
@@ -230,6 +235,7 @@ struct ModelInstallView: View {
     }
 
     func install() async {
+        openWindow(id: GaussApp.TASKS_WINDOW)
         do {
             try await scheduler?.schedule(rule: downloadRule).waitSuccess()
             try await scheduler?.schedule(rule: downloadRule.cleanRule(intermediateOutputs: true, finalOutputs: false)).waitSuccess()
