@@ -22,7 +22,7 @@ extension UTType {
     }
 }
 
-enum GaussSeed: Codable {
+enum GaussSeed: Codable, Equatable {
     case random
     case fixed(Int)
 }
@@ -78,6 +78,18 @@ enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvert
 }
 
 struct GaussPrompt: Identifiable, Codable, Sendable {
+    static func sameMLParams(lhs: GaussPrompt, rhs: GaussPrompt) -> Bool {
+        return lhs.text == rhs.text &&
+            lhs.negativeText == rhs.negativeText &&
+            lhs.guidance == rhs.guidance &&
+            lhs.steps == rhs.steps &&
+            lhs.seed == rhs.seed &&
+            lhs.safety == rhs.safety &&
+            lhs.model == rhs.model &&
+            lhs.width == rhs.width &&
+            lhs.height == rhs.height
+    }
+    
     // App concerns
     var id = UUID()
     var createdAt = Date.now

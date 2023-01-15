@@ -62,14 +62,23 @@ struct PromptComposer: View {
     }
 
     func onSubmit() {
-        let prompt = document.composer.clone()
-        document.prompts.append(prompt)
+        let prompt = {
+            if let oldPrompt = document.prompts.last(where: { otherPrompt in
+                GaussPrompt.sameMLParams(lhs: otherPrompt, rhs: document.composer)
+            }) {
+                return oldPrompt
+            }
+
+            let newPrompt = document.composer.clone()
+            document.prompts.append(newPrompt)
+            return newPrompt
+        }()
         submitAction()
         let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count).onSuccess { images in
             saveResults(promptId: prompt.id, images: images)
         }
 
-        print("Start job \(job.id) for promtp \(job.prompt.id) <==> \(prompt.id)")
+        print("Start job \(job.id) for prompt \(job.prompt.id) <==> \(prompt.id)")
     }
 
     func saveResults(promptId: UUID, images: [NSImage?]) {
