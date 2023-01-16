@@ -11,28 +11,74 @@ struct PromptComposer: View {
     @Binding var document: GaussDocument
     @State var count = 1
     @EnvironmentObject var kernel: GaussKernel
+    @ObservedObject var assets = AssetManager.inst
+    @Environment(\.openWindow) var openWindow
+
     var submitAction: () -> Void
+    var forceShow = false
+
+    var currentModel: GaussModel {
+        document.composer.model
+    }
+
+    var hasCurrentModel: Bool {
+        assets.locateModel(model: currentModel) != nil
+    }
 
     var body: some View {
         VStack {
-            PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
-                .task {
-                    let model = document.composer.model
-                    kernel.preloadPipeline(model)
+            let group = Group {
+                if hasCurrentModel {
+                    PromptInputView(text: $document.composer.text, count: $count, onSubmit: onSubmit)
+                        .task {
+                            let model = document.composer.model
+                            kernel.preloadPipeline(model)
+                        }
+                } else {
+                    HStack {
+                        Text("Model \"\(currentModel.description)\" (\(currentModel.shortDescription)) not available")
+                        showModelsButton
+                    }
                 }
-            PromptSettingsView(prompt: $document.composer)
+                PromptSettingsView(prompt: $document.composer)
+            }
+
+            if forceShow || assets.hasModel {
+                group
+            } else if !assets.loaded {
+                group.hidden()
+            } else {
+                Text("Download models to start generating images").font(.title2).frame(maxWidth: .infinity)
+                showModelsButton
+            }
         }.padding().background(.regularMaterial)
     }
 
+    @ViewBuilder
+    var showModelsButton: some View {
+        Button("Show models...") {
+            openWindow(id: GaussApp.MODELS_WINDOW)
+        }
+    }
+
     func onSubmit() {
-        let prompt = document.composer.clone()
-        document.prompts.append(prompt)
+        let prompt = {
+            if let oldPrompt = document.prompts.last(where: { otherPrompt in
+                GaussPrompt.sameMLParams(lhs: otherPrompt, rhs: document.composer)
+            }) {
+                return oldPrompt
+            }
+
+            let newPrompt = document.composer.clone()
+            document.prompts.append(newPrompt)
+            return newPrompt
+        }()
         submitAction()
         let job = kernel.startGenerateImageJob(forPrompt: prompt, count: count).onSuccess { images in
             saveResults(promptId: prompt.id, images: images)
         }
-        
-        print("Start job \(job.id) for promtp \(job.prompt.id) <==> \(prompt.id)")
+
+        print("Start job \(job.id) for prompt \(job.prompt.id) <==> \(prompt.id)")
     }
 
     func saveResults(promptId: UUID, images: [NSImage?]) {

@@ -14,11 +14,11 @@ struct ResultsView: View {
     var jobs: [GenerateImageJob] {
         return kernel.getJobs(for: prompt)
     }
-    
+
     var hasResults: Bool {
         return jobs.count > 0 || prompt.results.count > 0
     }
-    
+
     var body: some View {
         if hasResults {
             ScrollView(.horizontal) {
@@ -29,7 +29,7 @@ struct ResultsView: View {
                             .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
                             .frame(height: .resultSize)
                     }
-                    
+
                     ForEach(jobs) { job in
                         GaussProgressView(job: job)
                             .id(job.id)

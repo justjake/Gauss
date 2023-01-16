@@ -30,6 +30,7 @@ class GenerateImageJob: ObservableTask<
         self.count = count
         let noun = count > 1 ? "\(count)" : ""
         super.init("Imagine \(noun)", execute)
+        progress.totalUnitCount = Int64(prompt.steps)
     }
 }
 
@@ -54,20 +55,6 @@ class PreloadModelJob: ObservableTask<StableDiffusionPipeline, Never> {
     init(_ model: GaussModel, execute: @escaping Perform) {
         self.model = model
         super.init("Preload \(model)", execute)
-    }
-}
-
-struct GaussKernelResources {
-    var sd2Production: URL {
-        return Bundle.main.url(forResource: "sd2", withExtension: nil)!
-    }
-    
-    var sd14Production: URL {
-        return Bundle.main.url(forResource: "sd1.4", withExtension: nil)!
-    }
-    
-    var sd15Production: URL {
-        return Bundle.main.url(forResource: "sd1.5", withExtension: nil)!
     }
 }
 
@@ -99,14 +86,16 @@ actor ModelRepository {
     }
 }
 
-class GaussKernel: ObservableObject {
+class GaussKernel: ObservableObject, RuleScheduler {
+    static var inst = GaussKernel()
+    
     @MainActor @Published var jobs = ObservableTaskDictionary()
     @MainActor @Published var loadedModels = Set<GaussModel>()
     @MainActor var ready: Bool {
         return !loadedModels.isEmpty
     }
     
-    private let resources = GaussKernelResources()
+    private let resources = AssetManager.inst
     private let pipelines = ModelRepository()
     private var inferenceQueue = AsyncQueue()
     
@@ -160,17 +149,11 @@ class GaussKernel: ObservableObject {
         let config = MLModelConfiguration()
         config.computeUnits = .all
         
-        let url: URL = {
-            switch model {
-            case .sd2:
-                return self.resources.sd2Production
-            case .sd1_4:
-                return self.resources.sd14Production
-            case .sd1_5:
-                return self.resources.sd15Production
-            case .custom(let url):
-                return url
+        let url: URL = try {
+            guard let url = resources.locateModel(model: model) else {
+                throw QueueJobError.modelNotFound(model)
             }
+            return url
         }()
         
         let pipeline = try StableDiffusionPipeline(
@@ -207,7 +190,7 @@ class GaussKernel: ObservableObject {
             
         print("Fetching pipeline for job \(job.id)")
         let loadModel = await loadModelJob(job.prompt.model)
-        let pipeline: StableDiffusionPipeline = try await job.waitFor(loadModel.resume())
+        let pipeline: StableDiffusionPipeline = try await job.waitForValue(loadModel.resume())
             
         if Task.isCancelled {
             print("Canelled after building pipeline")
@@ -235,6 +218,7 @@ class GaussKernel: ObservableObject {
             let progress = $0
             print("Step \(progress.step) / \(progress.stepCount), avg \(sampleTimer.mean) variance \(sampleTimer.variance)")
             let currentImages = progress.currentImages.map { $0?.asNSImage() }
+            job.progress.completedUnitCount = Int64(progress.step)
             Task { await job.reportProgress((images: currentImages, info: progress)) }
                 
             if progress.stepCount != progress.step {
@@ -249,5 +233,51 @@ class GaussKernel: ObservableObject {
         print("pipeline.generateImages returned \(notNilCount) images and \(nilCount) nils")
             
         return result.map { $0?.asNSImage() }
+    }
+    
+    func schedule(rule: BuildRule) -> any ObservableTaskProtocol {
+        switch rule {
+        case let composite as CompositeBuildRule:
+            let task = ObservableTask<Void, Void>(composite.label) { graphJob in
+                let graph = composite.graph()
+                await withTaskGroup(of: Void.self) { group in
+                    var build = 0
+                    var loop = 0
+                    var targets = await graph.targets
+                    while !targets.isEmpty {
+                        if Task.isCancelled {
+                            return
+                        }
+                        let buildable = await graph.getBuildableRules()
+                        print("scheduler \(loop) targets:", targets)
+                        print("scheduler \(loop) willStartBuilding:", buildable)
+                        await graph.willStartBuilding(rules: buildable)
+                        for buildableRule in buildable {
+                            build += 1
+                            let id = "\(loop)-\(build)"
+                            _ = group.addTaskUnlessCancelled {
+                                print("scheduler building \(id):", buildableRule)
+                                let observable = self.schedule(rule: buildableRule)
+                                try! await graphJob.waitFor(observable)
+                                if await observable.anyState.isSuccess {
+                                    print("scheduler didFinishBuilding \(id):", buildableRule)
+                                    await graph.didFinishBuilding(rules: [buildableRule])
+                                }
+                            }
+                        }
+                        await group.next()
+                        loop += 1
+                        targets = await graph.targets
+                    }
+                }
+            }
+            return watchJob(task.resume())
+        // TODO: scheudle task to run
+        case let taskable as any TaskableBuildRule:
+            let task = taskable.createTask()
+            return watchJob(task.resume())
+        default:
+            fatalError("Not schedulable")
+        }
     }
 }

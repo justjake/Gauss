@@ -22,7 +22,7 @@ extension UTType {
     }
 }
 
-enum GaussSeed: Codable {
+enum GaussSeed: Codable, Equatable {
     case random
     case fixed(Int)
 }
@@ -40,27 +40,56 @@ extension GaussPromptId: Transferable {
 enum GaussModel: Hashable, Equatable, Codable, CaseIterable, CustomStringConvertible {
     static var Default: GaussModel = .sd1_5
     static var allCases: [GaussModel] = [
-        .sd2,
-        .sd1_4,
         .sd1_5,
+        .sd2_0,
+        .sd1_4,
     ]
     
-    case sd2
+    case sd2_0
     case sd1_4
     case sd1_5
-    case custom(URL)
     
     var description: String {
         switch self {
         case .sd1_5: return "Stable Diffusion 1.5"
         case .sd1_4: return "Stable Diffusion 1.4"
-        case .sd2: return "Stable Diffusion 2.0"
-        case .custom(let url): return "Custom (\(url))"
+        case .sd2_0: return "Stable Diffusion 2.0 Base"
+        }
+    }
+    
+    var shortDescription: String {
+        switch self {
+        case .sd1_5: return "SD 1.5"
+        case .sd1_4: return "SD 1.4"
+        case .sd2_0: return "SD 2.0"
+        }
+    }
+    
+    var fileSystemName: String {
+        switch self {
+        case .sd1_4:
+            return "sd1.4"
+        case .sd1_5:
+            return "sd1.5"
+        case .sd2_0:
+            return "sd2"
         }
     }
 }
 
 struct GaussPrompt: Identifiable, Codable, Sendable {
+    static func sameMLParams(lhs: GaussPrompt, rhs: GaussPrompt) -> Bool {
+        return lhs.text == rhs.text &&
+            lhs.negativeText == rhs.negativeText &&
+            lhs.guidance == rhs.guidance &&
+            lhs.steps == rhs.steps &&
+            lhs.seed == rhs.seed &&
+            lhs.safety == rhs.safety &&
+            lhs.model == rhs.model &&
+            lhs.width == rhs.width &&
+            lhs.height == rhs.height
+    }
+    
     // App concerns
     var id = UUID()
     var createdAt = Date.now

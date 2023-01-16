@@ -32,11 +32,29 @@ build() {
     --bundle-resources-for-swift-cli \
     --chunk-unet \
     -o "../$DESTINATION/$dest"
-  mv "../$DESTINATION/$dest/Unet.mlmodelc" "../$DESTINATION/$dest"
-  mv "../$DESTINATION/$dest/{build,$dest}"
+  mv "../$DESTINATION/$dest/Resources/Unet.mlmodelc" "../$DESTINATION/$dest"
+  mv "../$DESTINATION/$dest/{Resources,$dest}"
 }
 
-cd ml-stable-diffusion
-build stabilityai/stable-diffusion-2-base sd2-base
-build CompVis/stable-diffusion-v1-4       sd1.4
-build runwayml/stable-diffusion-v1-5      sd1.5
+compress() {
+  local model_version
+  local dest="$1"
+  pushd "$DESTINATION/$dest"
+
+  if [[ ! -f "$dest.zip" ]] ; then
+    zip -r $dest.zip $dest/
+  fi
+  split -b 1900m -d $dest.zip $dest.zip.
+
+  popd
+}
+
+# pushd ml-stable-diffusion
+# build stabilityai/stable-diffusion-2-base sd2.0
+# build CompVis/stable-diffusion-v1-4       sd1.4
+# build runwayml/stable-diffusion-v1-5      sd1.5
+# popd
+
+compress sd2.0
+compress sd1.4
+compress sd1.5

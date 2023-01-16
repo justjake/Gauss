@@ -15,7 +15,7 @@ struct PromptView: View {
         
     var body: some View {
         VStack {
-                /// Display the prompt
+            /// Display the prompt
             Group {
                 HStack(alignment: .top, spacing: 20) {
                     Text(prompt.text).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
@@ -78,7 +78,7 @@ struct PromptView: View {
 
     func generateImage(_ count: Int) {
         _ = kernel.startGenerateImageJob(forPrompt: prompt, count: count).onSuccess { images in
-                saveResults(images)
+            saveResults(images)
         }
     }
     
@@ -112,6 +112,7 @@ struct PromptView: View {
 struct PromptSettingsView: View {
     @Binding var prompt: GaussPrompt
     @EnvironmentObject var kernel: GaussKernel
+    @ObservedObject var assets = AssetManager.inst
     
     var body: some View {
         VStack {
@@ -128,10 +129,12 @@ struct PromptSettingsView: View {
     
     var modelPicker: some View {
         Picker("Model", selection: $prompt.model) {
-            Text("SD 2.0").tag(GaussModel.sd2).help(Text("Stable Diffusion 2.0 Base"))
-            Text("SD 1.5").tag(GaussModel.sd1_5).help(Text("Stable Diffusion 1.5"))
-            Text("SD 1.4").tag(GaussModel.sd1_4).help(Text("Stable Diffusion 1.4"))
-            // TODO: support custom models
+            ForEach(GaussModel.allCases, id: \.self) { model in
+                Text(model.shortDescription)
+                    .tag(model)
+                    .help(Text(model.description))
+                    .disabled(assets.locateModel(model: model) == nil)
+            }
         }
         .fixedSize()
         .onChange(of: prompt.model) { _ in
