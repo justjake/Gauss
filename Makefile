@@ -34,7 +34,7 @@ SPACE:=$(subst ,, )
 COMMA:=,
 MODEL_SPARSE_CHECKOUT_PATTERN=$(subst $(SPACE),$(COMMA),$(MODEL_SPARSE_CHECKOUT_PATTERNS))
 
-.PHONY: dev download zips aars clean clean-all
+.PHONY: dev download zips aars clean clean-all serve uninstall-models
 
 dev: download ApplicationSupport
 download: compiled-models/sd1.4 compiled-models/sd1.5 compiled-models/sd2
@@ -91,3 +91,9 @@ compiled-models/%.00: compiled-models/%
 
 ApplicationSupport:
 	ln -s $(HOME)/Library/Application\ Support/tl.jake.Gauss/ $@
+
+serve: aars
+	cd compiled-models && python -m http.server 8080
+
+uninstall-models: ApplicationSupport
+	rm -rf ./ApplicationSupport/models
