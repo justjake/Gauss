@@ -93,7 +93,7 @@ ApplicationSupport:
 	ln -s $(HOME)/Library/Application\ Support/tl.jake.Gauss/ $@
 
 serve: aars
-	cd compiled-models && python -m http.server 8080
+	cd compiled-models && python3 -m http.server 8080
 
 uninstall-models: ApplicationSupport
 	rm -rf ./ApplicationSupport/models
