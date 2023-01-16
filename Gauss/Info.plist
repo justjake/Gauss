@@ -5,6 +5,8 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeIconSystemGenerated</key>
+			<integer>1</integer>
 			<key>CFBundleTypeName</key>
 			<string>Gauss Notebook</string>
 			<key>CFBundleTypeRole</key>
@@ -32,7 +34,10 @@
 			<key>UTTypeDescription</key>
 			<string>Gauss Notebook</string>
 			<key>UTTypeIcons</key>
-			<dict/>
+			<dict>
+				<key>UTTypeIconBackgroundName</key>
+				<string>GaussNotebookIcon</string>
+			</dict>
 			<key>UTTypeIdentifier</key>
 			<string>tl.jake.gauss.notebook</string>
 			<key>UTTypeTagSpecification</key>
@@ -54,7 +59,10 @@
 			<key>UTTypeDescription</key>
 			<string>Gauss Notebook</string>
 			<key>UTTypeIcons</key>
-			<dict/>
+			<dict>
+				<key>UTTypeIconBackgroundName</key>
+				<string>GaussNotebookIcon</string>
+			</dict>
 			<key>UTTypeIdentifier</key>
 			<string>tl.jake.gauss.notebook</string>
 			<key>UTTypeTagSpecification</key>
