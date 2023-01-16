@@ -22,7 +22,6 @@
 			<key>NSUbiquitousDocumentUserActivityType</key>
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER).notebook</string>
 		</dict>
-		<dict/>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
