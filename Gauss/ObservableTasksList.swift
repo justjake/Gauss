@@ -14,13 +14,17 @@ struct ObservableTasksList: View {
         kernel.jobs
     }
 
-    var topLevelTasks: [any ObservableTaskProtocol] {
-        dict.values.filter { $0.waiters.count == 0 }
+    var list: [any ObservableTaskProtocol] {
+        dict.values.sorted { left, right in
+            left.createdAt <= right.createdAt
+        }
     }
 
     var body: some View {
-        List(topLevelTasks, id: \.id, children: \.children) { task in
-            ObservableTaskView(task: task, observableTask: task.observable)
+        List(list, id: \.id, children: \.children) { task in
+            if task.waiters.count == 0 {
+                ObservableTaskView(task: task, observableTask: task.observable)
+            }
         }
     }
 }
@@ -37,7 +41,7 @@ struct ObservableTaskView: View {
     @ViewBuilder
     var progress: some View {
         if task.anyState.pending {
-            ProgressView()
+            ProgressView().progressViewStyle(.linear)
         } else if task.anyState.running {
             ProgressView(task.progress)
         } else {
@@ -58,6 +62,7 @@ struct ObservableTaskView: View {
         }
     }
 
+    @ViewBuilder
     var cancelButton: some View {
         Button(action: task.cancel) {
             Label("Cancel", systemImage: "xmark.circle.fill")
@@ -67,14 +72,13 @@ struct ObservableTaskView: View {
         }.buttonStyle(.borderless)
     }
 
+    @ViewBuilder
     var details: some View {
-        Group {
-            switch task.anyState {
-            case .error(let error):
-                Text(error.localizedDescription).foregroundColor(.red)
-            default:
-                EmptyView()
-            }
+        switch task.anyState {
+        case .error(let error):
+            Text(error.localizedDescription).foregroundColor(.red)
+        default:
+            EmptyView()
         }
     }
 

@@ -22,7 +22,7 @@ struct PromptView: View {
                     deleteButton
                 }.padding([.horizontal, .top])
             
-                PromptSettingsView(prompt: $prompt).disabled(true)
+                PromptSettingsView(prompt: $prompt).padding(.horizontal).disabled(true)
             }
             
             /// Actions
@@ -31,19 +31,9 @@ struct PromptView: View {
                 HStack(spacing: 0) {
                     BottomBarButtonLabel {
                         HStack(spacing: 12) {
-                            Label("Generate again", systemImage: "repeat").padding(.trailing, 6)
-                                
-                            Button(action: { generateImage(1) }) {
-                                Label("1 image", systemImage: "1.square.fill").labelStyle(.iconOnly).imageScale(.large)
-                            }.help("Generate 1 image with this prompt")
-                                
-                            Button(action: { generateImage(4) }) {
-                                Label("4 image", systemImage: "4.square.fill").labelStyle(.iconOnly).imageScale(.large)
-                            }.help("Generate 4 images with this prompt")
-                                
-                            Button(action: { generateImage(9) }) {
-                                Label("9 images", systemImage: "9.square.fill").labelStyle(.iconOnly).imageScale(.large)
-                            }.help("Generate 9 images with this prompt")
+                            Label("Generate", systemImage: "repeat").fixedSize()
+                                .padding(.trailing, 4)
+                            generateAgain
                         }
                     }
                     
@@ -64,6 +54,21 @@ struct PromptView: View {
                 Divider().opacity(0)
             }
         }.background(.quaternary, in: GaussStyle.rectLarge).frame(maxWidth: 600)
+    }
+    
+    @ViewBuilder
+    var generateAgain: some View {
+        Button(action: { generateImage(1) }) {
+            Label("1 image", systemImage: "1.square.fill").labelStyle(.iconOnly).imageScale(.large)
+        }.help("Generate 1 image with this prompt")
+                                
+        Button(action: { generateImage(4) }) {
+            Label("4 image", systemImage: "4.square.fill").labelStyle(.iconOnly).imageScale(.large)
+        }.help("Generate 4 images with this prompt")
+                                
+        Button(action: { generateImage(9) }) {
+            Label("9 images", systemImage: "9.square.fill").labelStyle(.iconOnly).imageScale(.large)
+        }.help("Generate 9 images with this prompt")
     }
             
     var deleteButton: some View {
@@ -118,12 +123,12 @@ struct PromptSettingsView: View {
         VStack {
             HStack(spacing: 20) {
                 stepsSlider
-            }.padding(.horizontal)
+            }
             
             HStack(spacing: 20) {
                 guidanceSlider
                 modelPicker
-            }.padding(.horizontal)
+            }
         }
     }
     
@@ -224,6 +229,8 @@ struct PromptView_Previews: PreviewProvider {
     
     static var previews: some View {
         PromptView(prompt: $prompt, images: .constant([:]), document: $doc).padding()
+        
+        PromptView(prompt: $prompt, images: .constant([:]), document: $doc).padding().frame(width: .AppMinWidth).previewDisplayName("Min width")
         
         PromptView(prompt: .constant(GaussPrompt(
             results: [GaussResult(promptId: UUID(), images: [GaussImageRef()])], text: longPrompt

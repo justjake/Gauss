@@ -135,6 +135,7 @@ extension GaussPrompt: Transferable {
     }
 }
 
+/// Represents a persisted image in a GaussDocument
 struct GaussImageRef: Identifiable, Codable {
     var id = UUID()
     var createdAt = Date.now
@@ -154,6 +155,7 @@ struct TransferableImageRef: Transferable {
             $0.image.toPngData()
         }
         
+        // TODO: use existing file on disk?
         FileRepresentation(exportedContentType: .png, exporting: { ref in
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(ref.ref.id.uuidString, conformingTo: .png)
             let fileWrapper = FileWrapper(regularFileWithContents: ref.image.toPngData())

@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+extension CGFloat {
+    static let AppMinWidth = 375.0
+}
+
 @main
 struct GaussApp: App {
     @ObservedObject private var assets = AssetManager.inst
@@ -17,15 +21,17 @@ struct GaussApp: App {
 
     var body: some Scene {
         DocumentGroup(newDocument: GaussDocument()) { file in
-            ContentView(document: file.$document).environmentObject(kernel)
+            ContentView(document: file.$document)
+                .environmentObject(kernel)
+                .frame(minWidth: .AppMinWidth, minHeight: 400)
         }
 
         Window("Models", id: GaussApp.MODELS_WINDOW) {
-            SplashView().padding()
+            SplashView().padding().frame(minWidth: .AppMinWidth)
         }
 
         Window("Tasks", id: GaussApp.TASKS_WINDOW) {
-            ObservableTasksList()
+            ObservableTasksList().frame(minWidth: .AppMinWidth)
         }
     }
 }
