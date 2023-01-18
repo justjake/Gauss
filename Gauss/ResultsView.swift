@@ -23,21 +23,45 @@ struct ResultsView: View {
         if hasResults {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 1) {
-                    ForEach($prompt.results) { $result in
-                        ResultView(result: $result, images: $images)
-                            .id(result.id)
-                            .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
-                            .frame(height: .resultSize)
-                    }
+                    PersistedResultsView(
+                        prompt: prompt, results: $prompt.results, images: $images
+                    )
 
-                    ForEach(jobs) { job in
-                        GaussProgressView(job: job)
-                            .id(job.id)
-                            .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
-                            .frame(height: .resultSize)
-                    }
+                    PendingResultsView(
+                        prompt: prompt, jobs: jobs
+                    )
                 }
             }
+        }
+    }
+}
+
+// Keep getting IndexOutOfBounds panics
+// Internet suggests MORE VIEWS
+struct PersistedResultsView: View {
+    var prompt: GaussPrompt
+    @Binding var results: [GaussResult]
+    @Binding var images: GaussImages
+
+    var body: some View {
+        ForEach($results) { $result in
+            ResultView(result: $result, images: $images)
+                .id(result.id)
+                .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
+                .frame(height: .resultSize)
+        }
+    }
+}
+
+struct PendingResultsView: View {
+    var prompt: GaussPrompt
+    var jobs: [GenerateImageJob]
+    var body: some View {
+        ForEach(jobs) { job in
+            GaussProgressView(job: job)
+                .id(job.id)
+                .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
+                .frame(height: .resultSize)
         }
     }
 }

@@ -154,7 +154,7 @@ struct PromptSettingsView: View {
     }
     
     var stepsSlider: some View {
-        Slider(value: $prompt.steps, in: 1...75, step: 5) {} minimumValueLabel: {
+        Slider(value: $prompt.steps, in: 2...75, step: 5) {} minimumValueLabel: {
             Text("Speed")
         } maximumValueLabel: {
             Text("Quality")

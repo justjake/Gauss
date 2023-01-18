@@ -20,16 +20,7 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     ScrollView {
                         LazyVStack {
-                            ForEach($document.prompts, editActions: .move) { $prompt in
-                                PromptView(
-                                    prompt: $prompt,
-                                    images: $document.images,
-                                    document: $document
-                                ).id(prompt.id).frame(maxWidth: .infinity, alignment: .trailing).padding()
-
-                                ResultsView(prompt: $prompt, images: $document.images)
-                            }
-                            .frame(alignment: .top)
+                            PromptListView(document: $document, images: $document.images, prompts: $document.prompts)
 
                             // Occupy space
                             PromptComposer(
@@ -54,7 +45,38 @@ struct ContentView: View {
     }
 }
 
-extension DropInfo {}
+// Keep getting IndexOutOfBounds panics
+// Internet suggests MORE VIEWS https://stackoverflow.com/questions/72932427/swiftui-throwing-fatal-error-index-out-of-range-when-adding-element-for-app-w
+struct PromptListView: View {
+    @Binding var document: GaussDocument
+    @Binding var images: GaussImages
+    @Binding var prompts: [GaussPrompt]
+
+    var body: some View {
+        ForEach($prompts) { $prompt in
+            PromptWithResultsView(document: $document, images: $images, prompt: $prompt)
+        }
+        .frame(alignment: .top)
+    }
+}
+
+struct PromptWithResultsView: View {
+    @Binding var document: GaussDocument
+    @Binding var images: GaussImages
+    @Binding var prompt: GaussPrompt
+
+    var body: some View {
+        PromptView(
+            prompt: $prompt,
+            images: $images,
+            document: $document
+        )
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding()
+
+        ResultsView(prompt: $prompt, images: $document.images)
+    }
+}
 
 struct PromptDropDelegate: DropDelegate {
     var dropTarget: GaussPrompt
