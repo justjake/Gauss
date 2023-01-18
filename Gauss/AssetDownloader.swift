@@ -759,11 +759,14 @@ struct TryEachModelLocator: ModelLocator {
 }
 
 extension Dictionary where Key: Any, Value: Any {
-    mutating func upsert(forKey: Key, value: Value, updater: (inout Value) -> Value) {
+    @discardableResult mutating func upsert(forKey: Key, value: Value, updater: (inout Value) -> Value) -> Value {
         if var existing = self[forKey] {
-            self[forKey] = updater(&existing)
+            let result = updater(&existing)
+            self[forKey] = result
+            return result
         } else {
             self[forKey] = value
+            return value
         }
     }
 }

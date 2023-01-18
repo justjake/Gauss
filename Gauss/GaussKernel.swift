@@ -64,25 +64,54 @@ extension [any ObservableTaskProtocol] {
     }
 }
 
+extension MLComputeUnits {
+    static let PreferredOrder: [MLComputeUnits] = [
+        .all,
+        .cpuAndNeuralEngine,
+        .cpuAndGPU,
+        .cpuOnly,
+    ]
+        
+    func next() -> MLComputeUnits {
+        let ownIndex = MLComputeUnits.PreferredOrder.firstIndex(of: self) ?? 0
+        let nextIndex = (ownIndex + 1) % MLComputeUnits.PreferredOrder.count
+        return MLComputeUnits.PreferredOrder[nextIndex]
+    }
+}
+
 actor ModelRepository {
-    private var modelJobs = [GaussModel: LoadModelJob]()
+    private struct PipelineSettings {
+        var computeUnits: MLComputeUnits = .all
+    }
     
-    public func getLoadModelJob(model: GaussModel, create: () -> LoadModelJob) -> LoadModelJob {
+    private var modelJobs = [GaussModel: LoadModelJob]()
+    private var settings = [GaussModel: PipelineSettings]()
+    
+    public func getLoadModelJob(model: GaussModel, create: (MLComputeUnits) -> LoadModelJob) -> LoadModelJob {
         if let job = modelJobs[model] {
             return job
         }
         
-        let job = create().onFailure { _ in
-            Task {
-                self.modelJobs.removeValue(forKey: model)
-            }
+        let config = settings.upsert(forKey: model, value: PipelineSettings(), updater: { $0 })
+        let job = create(config.computeUnits).onFailure { _ in
+            self.modelJobs.removeValue(forKey: model)
         }
         modelJobs[model] = job
         return job
     }
     
-    public func drop(model: GaussModel) {
-        modelJobs.removeValue(forKey: model)
+    public func dropForRetry(model: GaussModel) async {
+        if let job = modelJobs.removeValue(forKey: model) {
+            if case .success(let pipeline) = await job.state {
+                pipeline.unloadResources()
+            } else {
+                job.cancel(reason: "Drop")
+            }
+        }
+        settings.upsert(forKey: model, value: PipelineSettings(), updater: { config in
+            config.computeUnits = config.computeUnits.next()
+            return config
+        })
     }
 }
 
@@ -123,9 +152,9 @@ class GaussKernel: ObservableObject, RuleScheduler {
     }
         
     func loadModelJob(_ model: GaussModel) async -> LoadModelJob {
-        await pipelines.getLoadModelJob(model: model) {
+        await pipelines.getLoadModelJob(model: model) { computeUnits in
             self.watchJob(LoadModelJob(model) { _ in
-                try self.createPipeline(model)
+                try self.createPipeline(model, computeUnits: computeUnits)
             })
         }
     }
@@ -136,18 +165,18 @@ class GaussKernel: ObservableObject, RuleScheduler {
     ) -> GenerateImageJob {
         let job = GenerateImageJob(forPrompt, count: count, execute: { job in try await self.performGenerateImageJob(job as! GenerateImageJob) }).onFailure { _ in
             // Model might need to be reloaded to work.
-            Task { await self.pipelines.drop(model: forPrompt.model) }
+            Task { await self.pipelines.dropForRetry(model: forPrompt.model) }
         }
 
         return watchJob(job)
     }
                 
-    private func createPipeline(_ model: GaussModel) throws -> StableDiffusionPipeline {
+    private func createPipeline(_ model: GaussModel, computeUnits: MLComputeUnits) throws -> StableDiffusionPipeline {
         print("Create new StableDiffusionPipeline for model \(model)")
         let timer = SampleTimer()
         timer.start()
         let config = MLModelConfiguration()
-        config.computeUnits = .all
+        config.computeUnits = computeUnits
         
         let url: URL = try {
             guard let url = resources.locateModel(model: model) else {
@@ -160,7 +189,17 @@ class GaussKernel: ObservableObject, RuleScheduler {
             resourcesAt: url,
             configuration: config
         )
+        
+        if Task.isCancelled {
+            throw QueueJobError.invalidState("Cancelled")
+        }
+        
         try pipeline.loadResources()
+        if Task.isCancelled {
+            pipeline.unloadResources()
+            throw QueueJobError.invalidState("Cancelled")
+        }
+        
         timer.stop()
         print("Create new StableDiffusionPipeline for model \(model): done after \(timer.median)s")
         return pipeline
@@ -193,7 +232,7 @@ class GaussKernel: ObservableObject, RuleScheduler {
         let pipeline: StableDiffusionPipeline = try await job.waitForValue(loadModel.resume())
             
         if Task.isCancelled {
-            print("Canelled after building pipeline")
+            print("Cancelling after building pipeline")
             return []
         }
             

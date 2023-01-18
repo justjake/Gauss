@@ -288,7 +288,7 @@ actor AsyncQueue {
     }
 }
 
-protocol ObservableTaskProtocol: Identifiable, ProgressReporting {
+protocol ObservableTaskProtocol: Identifiable, ProgressReporting, Sendable {
     associatedtype Success
     associatedtype SpecialProgress
     
@@ -469,26 +469,26 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identi
         cancel(reason: "Unknown")
     }
     
-    func onSuccess(_ handler: @escaping (Success) -> Void) -> Self {
+    nonisolated func onSuccess(_ handler: @escaping (Success) async -> Void) -> Self {
         onSettled { result in
             if case .success(let success) = result {
-                handler(success)
+                await handler(success)
             }
         }
     }
     
-    func onFailure(_ handler: @escaping (Error) -> Void) -> Self {
+    nonisolated func onFailure(_ handler: @escaping (Error) async -> Void) -> Self {
         onSettled { result in
             if case .failure(let error) = result {
-                handler(error)
+                await handler(error)
             }
         }
     }
     
-    func onSettled(_ handler: @escaping (Result<Success, Error>) -> Void) -> Self {
+    nonisolated func onSettled(_ handler: @escaping (Result<Success, Error>) async -> Void) -> Self {
         Task {
             let result = await task.result
-            await MainActor.run { handler(result) }
+            await handler(result)
         }
         return self
     }
