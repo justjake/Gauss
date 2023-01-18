@@ -26,7 +26,7 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
     var images: [NSImage?]
     var emptySpace: Empty
     var missingImage: Missing
-    
+
     @State var quicklookImage: URL? = nil
 
     var perRow: Int {
@@ -40,35 +40,64 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
     }
 
     var body: some View {
+        var index = incrementer()
         Grid(horizontalSpacing: 1, verticalSpacing: 1) {
-            ForEach(0..<perRow, id: \.self) { row in
-                GridRow {
-                    ForEach(0..<perRow, id: \.self) { col in
-                        let index = row * perRow + col
-                        if index > images.count - 1 {
-                            emptySpace
-                        } else if images[index] == nil {
-                            missingImage
-                        } else {
-                            let image = images[index]!
-                            GridImage(image: image, selected: quicklookImage != nil && quicklookImage == image.maybeTemporaryFileURL)
-                            .onTapGesture(count: 2) {
-                                quicklookImage = try? image.temporaryFileURL()
-                            }.gesture(MagnificationGesture(minimumScaleDelta: 1.2).onChanged { _ in
-                                quicklookImage = try? image.temporaryFileURL()
-                            }).contextMenu {
-                                Button("Copy") {
-                                    NSPasteboard.general.setData(image.toPngData(), forType: .png)
-                                }
-                                Button("Quick Look (double click)") {
-                                    quicklookImage = try? image.temporaryFileURL()
-                                }
-                            }
-                        }
-                    }
-                }
+            staticRepeat(perRow) {
+                row(index.next()!)
             }
         }.quickLookPreview($quicklookImage, in: imageURLs)
+    }
+
+    @ViewBuilder func row(_ row: Int) -> some View {
+        var index = incrementer()
+        GridRow {
+            staticRepeat(perRow) {
+                element(row: row, col: index.next()!)
+            }
+        }
+    }
+
+    @ViewBuilder func element(row: Int, col: Int) -> some View {
+        let index = row * perRow + col
+        if index > images.count - 1 {
+            emptySpace
+        } else if images[index] == nil {
+            missingImage
+        } else {
+            let image = images[index]!
+            GridImage(image: image, selected: quicklookImage != nil && quicklookImage == image.maybeTemporaryFileURL)
+                .onTapGesture(count: 2) {
+                    quicklookImage = try? image.temporaryFileURL()
+                }.gesture(MagnificationGesture(minimumScaleDelta: 1.2).onChanged { _ in
+                    quicklookImage = try? image.temporaryFileURL()
+                }).contextMenu {
+                    Button("Copy") {
+                        NSPasteboard.general.setData(image.toPngData(), forType: .png)
+                    }
+                    Button("Quick Look (double click)") {
+                        quicklookImage = try? image.temporaryFileURL()
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder func staticRepeat<T: View>(_ times: Int, content: () -> T) -> some View {
+        switch times {
+        case 3:
+            content()
+            content()
+            content()
+        case 2:
+            content()
+            content()
+        default:
+            content()
+        }
+    }
+
+    func incrementer() -> IndexingIterator<Range<Int>> {
+        let range = 0 ..< perRow
+        return range.makeIterator()
     }
 }
 
