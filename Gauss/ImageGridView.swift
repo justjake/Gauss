@@ -30,7 +30,10 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
     @State var quicklookImage: URL? = nil
 
     var perRow: Int {
-        return Int(round(Double(images.count).squareRoot()))
+        return max(
+            Int(round(Double(images.count).squareRoot())),
+            1
+        )
     }
 
     var imageURLs: [URL] {
@@ -39,13 +42,18 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
         }
     }
 
+    @ViewBuilder
     var body: some View {
-        var index = incrementer()
-        Grid(horizontalSpacing: 1, verticalSpacing: 1) {
-            staticRepeat(perRow) {
-                row(index.next()!)
-            }
-        }.quickLookPreview($quicklookImage, in: imageURLs)
+        if images.isEmpty {
+            emptySpace
+        } else {
+            var index = incrementer()
+            Grid(horizontalSpacing: 1, verticalSpacing: 1) {
+                staticRepeat(perRow) {
+                    row(index.next()!)
+                }
+            }.quickLookPreview($quicklookImage, in: imageURLs)
+        }
     }
 
     @ViewBuilder func row(_ row: Int) -> some View {
@@ -59,7 +67,7 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
 
     @ViewBuilder func element(row: Int, col: Int) -> some View {
         let index = row * perRow + col
-        if index > images.count - 1 {
+        if !images.indices.contains(index) {
             emptySpace
         } else if images[index] == nil {
             missingImage
