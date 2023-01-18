@@ -2,6 +2,8 @@
 
 A Stable Diffusion app for macOS built with SwiftUI and Apple's [ml-stable-diffusion](https://github.com/apple/ml-stable-diffusion) CoreML models.
 
+[Download the latest release](https://github.com/justjake/Gauss/releases)!
+
 ![Screenshot](./screenshot.png)
 
 ## Usage
