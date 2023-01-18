@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ObservableTasksList: View {
     @ObservedObject var kernel: GaussKernel = .inst
+    @State private var updateCount = 0
 
     var dict: ObservableTaskDictionary {
         kernel.jobs
@@ -21,10 +22,9 @@ struct ObservableTasksList: View {
     }
 
     var body: some View {
-        List(list, id: \.id, children: \.children) { task in
-            if task.waiters.count == 0 {
-                ObservableTaskView(task: task, observableTask: task.observable)
-            }
+        List(list, id: \.id) { task in
+            ObservableTaskView(task: task, observableTask: task.observable)
+                .onReceive(task.observable.objectWillChange, perform: { updateCount += 1 })
         }
     }
 }

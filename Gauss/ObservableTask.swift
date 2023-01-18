@@ -112,6 +112,7 @@ extension ObservableTaskDictionary {
 enum QueueJobError: Error, LocalizedError {
     case invalidState(String)
     case modelNotFound(GaussModel)
+    case childFailed(any ObservableTaskProtocol)
     
     var errorDescription: String? {
         switch self {
@@ -119,6 +120,8 @@ enum QueueJobError: Error, LocalizedError {
             return "Model \"\(model.description)\" not installed"
         case .invalidState(let message):
             return message
+        case .childFailed(let child):
+            return "Failed: \(child.label)"
         }
     }
 }
@@ -295,7 +298,7 @@ protocol ObservableTaskProtocol: Identifiable, ProgressReporting {
 
     var observable: ObservableTaskModel { get }
     @MainActor var state: ObservableTaskState<SpecialProgress, Success> { get }
-    @MainActor var waitingFor: ObservableTaskDictionary { get }
+    @MainActor var childJobs: ObservableTaskDictionary { get }
     @MainActor var waiters: Set<UUID> { get }
     var task: Task<Success, Error> { get }
     
@@ -313,10 +316,10 @@ extension ObservableTaskProtocol {
     }
     
     @MainActor var children: [any ObservableTaskProtocol]? {
-        if waitingFor.values.isEmpty {
+        if childJobs.values.isEmpty {
             return nil
         } else {
-            return Array(waitingFor.values)
+            return Array(childJobs.values)
         }
     }
 }
@@ -333,7 +336,7 @@ extension ObservableTaskProtocol {
 class ObservableTaskModel: ObservableObject, Identifiable {
     let id: UUID
     @MainActor @Published var state: ObservableTaskState<Any, Any> = .pending
-    @MainActor @Published var waitingFor = ObservableTaskDictionary()
+    @MainActor @Published var childJobs = ObservableTaskDictionary()
     @MainActor @Published var waiters = Set<UUID>()
     
     init(id: UUID) {
@@ -353,6 +356,8 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identi
     let fn: Perform
     var progress = Progress()
     
+    private var everHadWaiter = false
+    
     // Proxy observable tstate to ObservableTaskModel
     let observable: ObservableTaskModel
     @MainActor var anyState: ObservableTaskState<Any, Any> {
@@ -363,8 +368,8 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identi
         return observable.state.cast(success: Success.self, progress: OwnProgress.self)
     }
     
-    @MainActor var waitingFor: ObservableTaskDictionary {
-        return observable.waitingFor
+    @MainActor var childJobs: ObservableTaskDictionary {
+        return observable.childJobs
     }
     
     @MainActor var waiters: Set<UUID> {
@@ -419,12 +424,9 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identi
     
     func dependOn(_ other: any ObservableTaskProtocol) async {
         await MainActor.run {
-            observable.waitingFor.insert(job: other)
+            observable.childJobs.insert(job: other)
         }
         await other.didStartWaiting(waiter: self)
-//        progress.totalUnitCount += 1
-        // TODO: figure out how we want to do tracking
-        //        progress.addChild(other.progress, withPendingUnitCount: 1)
     }
     
     func waitForValue<Success: Sendable, Progress: Sendable>(_ other: ObservableTask<Success, Progress>) async throws -> Success {
@@ -434,14 +436,21 @@ class ObservableTask<Success: Sendable, OwnProgress: Sendable>: NSObject, Identi
     
     func waitFor(_ other: any ObservableTaskProtocol) async throws {
         await dependOn(other)
-        await other.wait()
-        await MainActor.run { observable.waitingFor.remove(job: other) }
-        await other.didFinishWaiting(waiter: self)
         try await other.waitSuccess()
+        await MainActor.run { observable.childJobs.remove(job: other) }
+        await other.didFinishWaiting(waiter: self)
     }
     
     func didStartWaiting(waiter: any ObservableTaskProtocol) async {
-        _ = await MainActor.run { observable.waiters.insert(waiter.id) }
+        _ = await MainActor.run {
+            if !self.everHadWaiter {
+                waiter.progress.totalUnitCount += 1
+                waiter.progress.addChild(self.progress, withPendingUnitCount: 1)
+                self.everHadWaiter = true
+            }
+            
+            observable.waiters.insert(waiter.id)
+        }
     }
     
     func didFinishWaiting(waiter: any ObservableTaskProtocol) async {

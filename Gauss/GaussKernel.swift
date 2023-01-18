@@ -240,7 +240,7 @@ class GaussKernel: ObservableObject, RuleScheduler {
         case let composite as CompositeBuildRule:
             let task = ObservableTask<Void, Void>(composite.label) { graphJob in
                 let graph = composite.graph()
-                await withTaskGroup(of: Void.self) { group in
+                try await withThrowingTaskGroup(of: Void.self) { group in
                     var build = 0
                     var loop = 0
                     var targets = await graph.targets
@@ -258,14 +258,30 @@ class GaussKernel: ObservableObject, RuleScheduler {
                             _ = group.addTaskUnlessCancelled {
                                 print("scheduler building \(id):", buildableRule)
                                 let observable = self.schedule(rule: buildableRule)
-                                try! await graphJob.waitFor(observable)
+                                do {
+                                    try await graphJob.waitFor(observable)
+                                } catch {
+                                    throw QueueJobError.childFailed(observable)
+                                }
                                 if await observable.anyState.isSuccess {
                                     print("scheduler didFinishBuilding \(id):", buildableRule)
                                     await graph.didFinishBuilding(rules: [buildableRule])
                                 }
                             }
                         }
-                        await group.next()
+                        try await group.next()
+                        
+                        let waitingFor = await graphJob.observable.childJobs.values
+                        for job in waitingFor {
+                            let state = await job.anyState
+                            switch state {
+                            case .cancelled:
+                                graphJob.cancel(reason: "Job cancelled: \(job.label)")
+                            default:
+                                break
+                            }
+                        }
+                        
                         loop += 1
                         targets = await graph.targets
                     }
