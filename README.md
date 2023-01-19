@@ -1,10 +1,14 @@
-# Gauss
-
+# Gauss 
+ 
 A Stable Diffusion app for macOS built with SwiftUI and Apple's [ml-stable-diffusion](https://github.com/apple/ml-stable-diffusion) CoreML models.
 
-[Download the latest release](https://github.com/justjake/Gauss/releases)!
+[Download the latest release][releases]!
+
+![GitHub all releases](https://img.shields.io/github/downloads/justjake/Gauss/total) ![GitHub](https://img.shields.io/github/license/justjake/Gauss)
 
 ![Screenshot](./screenshot.png)
+
+[releases]: https://github.com/justjake/Gauss/releases
 
 ## Usage
 
@@ -17,7 +21,7 @@ A Stable Diffusion app for macOS built with SwiftUI and Apple's [ml-stable-diffu
 
 ## Project Status
 
-**This software is under development and is alpha quality.** If you'd like to contribute, you can build the project by following the instructions for developers below.
+This software is under development and is alpha quality. Builds are available on the [releases] page.
 
 Alternatives:
 
@@ -29,6 +33,8 @@ Alternatives:
 - Recommended: an Apple Silicon CPU. Intel hardware may work, but is untested by the primary developer and could be slow.
 
 ## Developer setup
+
+If you'd like to contribute, you can build the project by following the instructions for developers below.
 
 ### System requirements
 
