@@ -11,33 +11,44 @@ let SINGLE_SELECTION = true
 
 struct ContentView: View {
     @Binding var document: GaussDocument
-    @State var dragging: GaussPrompt? = nil
-    private let bottomViewId = UUID()
+    @State var bottomViewId = UUID()
 
     var body: some View {
         ScrollViewReader { proxy in
             ZStack(alignment: .top) {
-                VStack(spacing: 0) {
-                    ScrollView {
-                        LazyVStack {
+                ScrollView {
+                    VStack {
+                        // WARNING: using LazyVStack here appears to cause fatal errors:
+                        // Swift/ContiguousArrayBuffer.swift:600: Fatal error: Index out of range
+                        // VStack seems fine?
+                        // Stack Overflow is not helpful.
+                        VStack {
                             PromptListView(document: $document, images: $document.images, prompts: $document.prompts)
+                        }
 
-                            // Occupy space
-                            PromptComposer(
-                                document: $document,
-                                submitAction: {}
-                            ).disabled(true).opacity(0).id(bottomViewId)
-                        }.frame(maxWidth: .infinity)
-                    }
+                        // Occupy space
+                        PromptComposer(
+                            document: $document,
+                            submitAction: {}
+                        )
+                        .disabled(true)
+                        .opacity(0)
+                        .id(bottomViewId)
+                    }.frame(maxWidth: .infinity)
                 }
 
                 VStack {
                     Spacer()
-                    PromptComposer(document: $document, submitAction: { withAnimation { proxy.scrollTo(bottomViewId) } })
-                        .onAppear {
-                            Task {
-                                await AssetManager.inst.refreshAvailableModels()
-                            }
+
+                    let scrollToBottom = {
+                        withAnimation {
+                            proxy.scrollTo(bottomViewId)
+                        }
+                    }
+
+                    PromptComposer(document: $document, submitAction: scrollToBottom)
+                        .task {
+                            await AssetManager.inst.refreshAvailableModels()
                         }
                 }
             }.background(Rectangle().fill(.background))
@@ -75,34 +86,6 @@ struct PromptWithResultsView: View {
         .padding()
 
         ResultsView(prompt: $prompt, images: $document.images)
-    }
-}
-
-struct PromptDropDelegate: DropDelegate {
-    var dropTarget: GaussPrompt
-    @Binding var dragging: GaussPrompt?
-    @Binding var document: GaussDocument
-
-    func dropEntered(info: DropInfo) {
-        if !info.hasItemsConforming(to: [.gaussPromptId]) {
-            return
-        }
-
-        guard let draggingOwnItem = dragging else {
-            return
-        }
-
-        if draggingOwnItem.id == dropTarget.id {
-            return
-        }
-
-        let from = document.prompts.firstIndex { $0.id == dropTarget.id }
-        let to = document.prompts.firstIndex { $0.id == dropTarget.id }
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return false
     }
 }
 

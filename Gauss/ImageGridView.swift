@@ -45,7 +45,7 @@ struct CustomNSImageGridView<Empty: View, Missing: View>: View {
     @ViewBuilder
     var body: some View {
         if images.isEmpty {
-            emptySpace
+            EmptyView()
         } else {
             var index = incrementer()
             Grid(horizontalSpacing: 1, verticalSpacing: 1) {

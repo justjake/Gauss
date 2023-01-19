@@ -24,7 +24,7 @@ struct GaussApp: App {
             ContentView(document: file.$document)
                 .environmentObject(kernel)
                 .frame(minWidth: .AppMinWidth, minHeight: 400)
-        }
+        }.defaultSize(width: 750, height: 850)
 
         Window("Models", id: GaussApp.MODELS_WINDOW) {
             SplashView().padding().frame(minWidth: .AppMinWidth)
@@ -33,5 +33,7 @@ struct GaussApp: App {
         Window("Tasks", id: GaussApp.TASKS_WINDOW) {
             ObservableTasksList().frame(minWidth: .AppMinWidth)
         }
+        .defaultSize(width: .AppMinWidth, height: .AppMinWidth * 2)
+        .defaultPosition(.topTrailing)
     }
 }

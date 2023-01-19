@@ -46,7 +46,6 @@ struct PersistedResultsView: View {
     var body: some View {
         ForEach($results) { $result in
             ResultView(result: $result, images: $images)
-                .id(result.id)
                 .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
                 .frame(height: .resultSize)
         }
@@ -59,7 +58,6 @@ struct PendingResultsView: View {
     var body: some View {
         ForEach(jobs) { job in
             GaussProgressView(job: job)
-                .id(job.id)
                 .aspectRatio(CGSize(width: prompt.width, height: prompt.height), contentMode: .fit)
                 .frame(height: .resultSize)
         }
