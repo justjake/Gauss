@@ -22,9 +22,18 @@ struct ObservableTasksList: View {
     }
 
     var body: some View {
-        List(list, id: \.id) { task in
-            ObservableTaskView(task: task, observableTask: task.observable)
-                .onReceive(task.observable.objectWillChange, perform: { updateCount += 1 })
+        if list.isEmpty {
+            Text("No running tasks").font(.title2).foregroundColor(.gray)
+        } else {
+            ScrollView {
+                Grid {
+                    Divider().hidden()
+                    ForEach(list, id: \.id) { task in
+                        ObservableTaskView(task: task, observableTask: task.observable)
+                            .onReceive(task.observable.objectWillChange, perform: { updateCount += 1 })
+                    }
+                }.gridColumnAlignment(.leading)
+            }
         }
     }
 }
@@ -35,36 +44,56 @@ struct ObservableTaskView: View {
     @ObservedObject var kernel: GaussKernel = .inst
 
     var label: some View {
-        Text(task.label)
+        Text(task.label).multilineTextAlignment(.leading)
+    }
+    
+    var body: some View {
+        GridRow {
+            label.padding(.leading).gridColumnAlignment(.leading)
+            details
+            action.gridColumnAlignment(.trailing).padding(.trailing)
+        }
+        Divider().padding(.horizontal)
     }
 
     @ViewBuilder
-    var progress: some View {
-        if task.anyState.pending {
+    var details: some View {
+        switch task.anyState {
+        case .pending:
             ProgressView().progressViewStyle(.linear)
-        } else if task.anyState.running {
+        case .progress, .running:
             ProgressView(task.progress)
-        } else {
-            Spacer()
+        case .cancelled:
+            Text("Cancelled")
+                .foregroundColor(.gray)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .error(let error):
+            Text(error.localizedDescription)
+                .foregroundColor(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .success:
+            Text("Complete")
         }
     }
 
     @ViewBuilder
     var action: some View {
         if observableTask.state.pending || observableTask.state.running {
-            cancelButton
+            cancelButton(action: task.cancel)
         } else if observableTask.state.finalized {
-            Button("Remove") {
+            cancelButton {
                 kernel.jobs.remove(job: task)
             }
         } else {
-            EmptyView()
+            cancelButton {
+                return
+            }.disabled(true).hidden()
         }
     }
 
     @ViewBuilder
-    var cancelButton: some View {
-        Button(action: task.cancel) {
+    func cancelButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Label("Cancel", systemImage: "xmark.circle.fill")
                 .symbolRenderingMode(.hierarchical)
                 .labelStyle(.iconOnly)
@@ -72,31 +101,27 @@ struct ObservableTaskView: View {
         }.buttonStyle(.borderless)
     }
 
-    @ViewBuilder
-    var details: some View {
-        switch task.anyState {
-        case .error(let error):
-            Text(error.localizedDescription).foregroundColor(.red)
-        default:
-            EmptyView()
-        }
-    }
-
-    var body: some View {
-        VStack {
-            HStack {
-                label
-                progress
-                action
-            }
-            details
-            Divider()
-        }
-    }
 }
 
 struct ObservableJobsList_Previews: PreviewProvider {
+    static var privateKernel = {
+        var kernel = GaussKernel()
+        let tasks: [any ObservableTaskProtocol] = [
+            ObservableTask.exampleTask(label: "Imagine 4", errorText: "NN Failed").resume(),
+            ObservableTask.exampleTask(label: "Load Stable Diffusion 2.0", errorText: ""),
+            ObservableTask.exampleTask(label: "Install Stable Diffusion 1.4", errorText: "Subtask failed").resume(),
+            ObservableTask.exampleTask(label: "Download sd1.4.aar.0", errorText: "Could not connect to the server").resume(),
+            ObservableTask.exampleTask(label: "Download sd1.4.aar.0", errorText: "Could not connect to the server").resume(),
+        ]
+
+        for task in tasks {
+            kernel.jobs.insert(job: task)
+        }
+
+        return kernel
+    }()
+
     static var previews: some View {
-        ObservableTasksList()
+        ObservableTasksList(kernel: privateKernel)
     }
 }

@@ -344,6 +344,12 @@ class ObservableTaskModel: ObservableObject, Identifiable {
     }
 }
 
+extension ObservableTask<Void, Void> {
+    static func exampleTask(label: String, errorText: String) -> ObservableTask<Void, Void> {
+        .init(label) { _ in throw QueueJobError.invalidState(errorText) }
+    }
+}
+
 /// An ObservableTask is a Task-like abstraction that reports its progress via a published property on the main thread.
 /// ObservableTasks are deferred; they begin executing once `observableTask.resume()` is called.
 // TODO: https://developer.apple.com/documentation/foundation/progress#1661050
